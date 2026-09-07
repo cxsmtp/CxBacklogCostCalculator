@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkmarx Backlog Cost Calculator</title>
+<meta name="description" content="Turn Checkmarx One vulnerability exports into a credit forecast: triage and remediation cost, backlog projection, and an interactive customer report.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236B34FC'/%3E%3Cpath d='M9 16.4l4.6 4.6L23 10' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <span class="brandmark" id="brandmark"></span>
+    <span class="divider" aria-hidden="true"></span>
+    <span class="title">
+      <strong>Backlog Cost Calculator</strong>
+      <span>Credit forecasting for triage &amp; remediation</span>
+    </span>
+    <span class="spacer"></span>
+    <button type="button" class="ghost" id="btn-sample">Load sample data</button>
+    <button type="button" class="ghost icon" id="btn-theme" title="Switch light / dark" aria-label="Switch light / dark">◐</button>
+    <button type="button" class="primary" id="btn-export" disabled>Export customer report</button>
+  </header>
+
+  <!-- ============================================================ step 1 -- -->
+  <section class="card" id="card-input">
+    <header>
+      <span class="step-badge">1</span>
+      <h2>Customer &amp; data</h2>
+      <span class="sub">Two Checkmarx One exports: the open backlog, and what was fixed each week.</span>
+    </header>
+
+    <div class="grid three" style="margin-bottom:16px">
+      <label class="field">
+        <span>Customer name</span>
+        <input type="text" id="customer-name" placeholder="e.g. Northwind Bank" autocomplete="organization">
+      </label>
+      <label class="field">
+        <span>Prepared by</span>
+        <input type="text" id="prepared-by" placeholder="Your name or team">
+      </label>
+      <label class="field">
+        <span>Company logo for the report <span class="hint">(optional)</span></span>
+        <input type="file" id="logo-file" accept="image/svg+xml,image/png,image/jpeg">
+      </label>
+    </div>
+
+    <div class="grid two">
+      <div class="dropzone" id="drop-total" tabindex="0" role="button"
+           aria-label="Upload the total open vulnerabilities export">
+        <h3>Total vulnerabilities by severity</h3>
+        <p class="hint">The open backlog at the end of each week.</p>
+        <p class="file" id="file-total">Drop the .xlsx here, or click to choose</p>
+      </div>
+      <div class="dropzone" id="drop-fixed" tabindex="0" role="button"
+           aria-label="Upload the fixed vulnerabilities export">
+        <h3>Fixed vulnerabilities by severity</h3>
+        <p class="hint">What was actually closed during each week.</p>
+        <p class="file" id="file-fixed">Drop the .xlsx here, or click to choose</p>
+      </div>
+    </div>
+    <input type="file" id="file-input" class="hidden" accept=".xlsx,.xlsm,.csv,.tsv" multiple>
+
+    <div id="input-messages" style="margin-top:14px"></div>
+  </section>
+
+  <!-- ============================================================ step 2 -- -->
+  <section class="card hidden" id="card-assumptions">
+    <header>
+      <span class="step-badge">2</span>
+      <h2>Scope &amp; assumptions</h2>
+      <span class="sub">These drive every number below. They are locked into the exported report.</span>
+    </header>
+
+    <div class="grid two">
+      <div>
+        <h3 style="margin-bottom:8px">What is the plan for each severity?</h3>
+        <p class="hint" style="margin-bottom:10px">
+          <strong>Triage + remediate</strong> takes a severity to zero.
+          <strong>Triage only</strong> pays to disposition the findings, so the
+          false positives leave and the real ones stay on the books by choice.
+          <strong>Not in plan</strong> costs nothing and moves nothing.
+        </p>
+        <div id="scope-modes"></div>
+
+        <h3 style="margin:20px 0 8px">Credit rates</h3>
+        <div class="grid two">
+          <label class="field">
+            <span>Credits per triage</span>
+            <input type="number" id="rate-triage" min="0" step="0.5" value="1">
+          </label>
+          <label class="field">
+            <span>Credits per remediation</span>
+            <input type="number" id="rate-remediation" min="0" step="0.5" value="3">
+          </label>
+        </div>
+        <p class="hint" style="margin-top:8px">
+          Every finding is triaged. Only the true positives are remediated —
+          false positives cost one triage credit and stop there.
+        </p>
+
+        <h3 style="margin:20px 0 8px">History window</h3>
+        <label class="field">
+          <span>Average the arrival and fix rates over the last
+            <output id="lookback-out">8</output> weeks</span>
+          <input type="range" id="lookback" min="2" max="26" step="1" value="8">
+        </label>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:8px">True-positive rate after triage</h3>
+        <p class="hint" style="margin-bottom:10px">
+          The share of findings that turn out to be real and need a fix. Defaults
+          are typical AppSec figures — replace them with your own triage history
+          the moment you have it.
+        </p>
+        <div id="tp-rows"></div>
+
+        <h3 style="margin:20px 0 8px">Optional: credit price</h3>
+        <label class="field">
+          <span>Currency value of one credit <span class="hint">(leave blank to stay in credits only)</span></span>
+          <input type="number" id="credit-price" min="0" step="0.01" placeholder="e.g. 0.75">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== results -- -->
+  <div id="results" class="hidden">
+
+    <p class="section-title">Where the backlog stands</p>
+    <div class="grid four" id="kpis"></div>
+    <div class="card" style="margin-top:14px"><p class="headline" id="headline"></p></div>
+
+    <p class="section-title">Backlog trend and projection</p>
+    <section class="card chart-card">
+      <header>
+        <h2>Open findings by severity</h2>
+        <span class="sub" id="trend-sub"></span>
+      </header>
+      <div class="chart-wrap" id="chart-backlog"></div>
+      <div class="legend" id="legend-backlog"></div>
+      <details class="table-view"><summary>Show the weekly data</summary>
+        <div class="table-scroll" id="table-backlog"></div>
+      </details>
+    </section>
+
+    <section class="card chart-card">
+      <header>
+        <h2>Arrivals against clearances, week by week</h2>
+        <span class="sub">New findings are derived: open(t) − open(t−1) + fixed(t).</span>
+      </header>
+      <div class="chart-wrap" id="chart-flow"></div>
+      <div class="legend" id="legend-flow"></div>
+      <details class="table-view"><summary>Show the weekly data</summary>
+        <div class="table-scroll" id="table-flow"></div>
+      </details>
+    </section>
+
+    <p class="section-title">How fast can the debt be killed?</p>
+    <section class="card">
+      <header>
+        <h2>Set the pace</h2>
+        <span class="spacer"></span>
+      </header>
+      <div class="grid three">
+        <label class="field">
+          <span>Work through <output id="pace-out">0</output> findings per week</span>
+          <input type="range" id="pace" min="0" max="100" step="1" value="50">
+          <span class="hint" id="pace-hint"></span>
+        </label>
+        <label class="field">
+          <span>Or pick a deadline</span>
+          <select id="deadline">
+            <option value="13">Clear the backlog in 13 weeks (1 quarter)</option>
+            <option value="26" selected>Clear the backlog in 26 weeks (2 quarters)</option>
+            <option value="52">Clear the backlog in 52 weeks (1 year)</option>
+            <option value="104">Clear the backlog in 104 weeks (2 years)</option>
+          </select>
+          <span class="hint" id="deadline-hint"></span>
+          <button type="button" class="ghost" id="btn-match-deadline"
+                  style="margin-top:8px;padding:5px 11px;font-size:12px">Set the pace to meet it</button>
+        </label>
+        <label class="field">
+          <span>Forecast horizon: <output id="horizon-out">52</output> weeks</span>
+          <input type="range" id="horizon" min="8" max="156" step="4" value="52">
+          <span class="hint">Charts stop here; time-to-zero is solved analytically.</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <header>
+        <h2>Backlog under four scenarios</h2>
+        <span class="sub">Same arrival rate throughout — only the pace changes.</span>
+      </header>
+      <div class="chart-wrap" id="chart-scenarios"></div>
+      <div class="legend" id="legend-scenarios"></div>
+      <div class="table-scroll" style="margin-top:14px" id="table-scenarios"></div>
+    </section>
+
+    <section class="card chart-card">
+      <header>
+        <h2>Projected backlog at the chosen pace</h2>
+        <span class="sub" id="projection-sub"></span>
+      </header>
+      <div class="chart-wrap" id="chart-projection"></div>
+      <div class="legend" id="legend-projection"></div>
+    </section>
+
+    <p class="section-title">What it costs in Checkmarx credits</p>
+    <div class="grid four" id="cost-kpis"></div>
+
+    <section class="card chart-card" style="margin-top:14px">
+      <header>
+        <h2>Cost to clear today's backlog</h2>
+        <span class="sub">Lighter segment = triage, solid segment = remediation.</span>
+      </header>
+      <div class="chart-wrap" id="chart-cost"></div>
+      <div class="legend" id="legend-cost"></div>
+      <div class="table-scroll" style="margin-top:14px" id="table-cost"></div>
+    </section>
+
+    <section class="card">
+      <header>
+        <h2>Budget check</h2>
+        <span class="sub">Worst-first: Critical is bought before High, and so on down.</span>
+      </header>
+      <div class="grid two">
+        <label class="field">
+          <span>If we had this many credits…</span>
+          <input type="number" id="budget-credits" min="0" step="1000" placeholder="e.g. 250000">
+        </label>
+        <div id="budget-result" class="callout">Enter a budget to see how far it goes.</div>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <header>
+        <h2>Credit spend over time at the chosen pace</h2>
+        <span class="sub">Cumulative credits consumed, including the findings that arrive along the way.</span>
+      </header>
+      <div class="chart-wrap" id="chart-spend"></div>
+      <div class="legend" id="legend-spend"></div>
+    </section>
+
+    <p class="section-title">Hand it to the customer</p>
+    <section class="card no-print">
+      <header>
+        <span class="step-badge">3</span>
+        <h2>Export the interactive report</h2>
+      </header>
+      <p class="hint" style="margin-bottom:12px">
+        A single self-contained HTML file. The customer can switch severities and
+        whole scope-items on and off and watch the credit total move — but the
+        credit rates and true-positive assumptions behind each item are fixed and
+        read-only. It prints straight to PDF from the browser.
+      </p>
+      <div class="grid three">
+        <label class="field">
+          <span>Report title</span>
+          <input type="text" id="report-title" placeholder="Security debt: cost to clear">
+        </label>
+        <label class="field">
+          <span>Valid until <span class="hint">(optional)</span></span>
+          <input type="text" id="report-validity" placeholder="e.g. 31 December 2026">
+        </label>
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <button type="button" class="primary" id="btn-export-2">Download report</button>
+          <button type="button" class="ghost" id="btn-csv">Download CSV</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="footer">
+    <span>Checkmarx Backlog Cost Calculator</span>
+    <span>Everything runs in your browser — no upload leaves this machine.</span>
+    <span>Credits: 1 per triage, 3 per remediation — both editable.</span>
+  </footer>
+
+</div>
+
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/xlsx-lite.js"></script>
+<script src="assets/js/parse.js"></script>
+<script src="assets/js/model.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/report.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
