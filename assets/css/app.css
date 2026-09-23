@@ -541,3 +541,64 @@ tfoot td { font-weight: 650; border-top: 1px solid var(--border-strong); border-
 .kpi .label { display: block; }
 .kpi .value { display: block; }
 .headline strong { color: var(--ink); font-weight: 650; }
+
+/* ---------------------------------------------------------- timeline chips -- */
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.section-head .section-title { margin-bottom: 8px; }
+
+.chip-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+.chip {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chip + .chip { border-left: 1px solid var(--border); }
+.chip.is-on { background: var(--brand); color: var(--brand-ink); }
+.chip.is-on + .chip { border-left-color: transparent; }
+.chip-caption { font-size: 12px; color: var(--muted); margin: -2px 0 12px; }
+
+/* ----------------------------------------------------------- matrix table -- */
+
+/* Metrics down the side, severities across the top: the shape people read out
+ * loud in a meeting. The Total column is the one everyone looks at first. */
+.matrix td:first-child { font-weight: 550; }
+.matrix .total-col {
+  font-weight: 650;
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+}
+.matrix thead th.total-col { color: var(--ink); }
+.matrix tr.is-muted td { color: var(--muted); }
+.matrix tr.is-highlight td { background: var(--brand-tint); }
+.matrix tr.is-highlight td.total-col { background: var(--brand-tint); }
+.matrix tr.is-total td {
+  border-top: 1px solid var(--border-strong);
+  font-size: 14px;
+}
+.matrix tr.is-total td.total-col { color: var(--brand); }
+.matrix tbody tr:hover td { background: var(--surface-2); }
+.matrix tbody tr.is-highlight:hover td { background: var(--brand-tint); }
+.sev-head-cell { display: inline-flex; align-items: center; white-space: nowrap; }
+
+.kpi.accent { background: var(--brand-tint); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.kpi.accent .value { color: var(--brand); }

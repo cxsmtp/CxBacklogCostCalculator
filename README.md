@@ -108,22 +108,49 @@ The false-positive defaults (15 / 25 / 40 / 60 / 90%) are typical AppSec
 figures, not measurements. They are a starting position for the sliders, and
 the report says so.
 
-### The two rates that actually matter
+### Pick the timeline
 
-Both headline indicators are **counts per week**, averaged over the chosen
-window:
+Every rate in the report is measured over a window the user chooses, and the
+choices are generated from the data rather than hard-coded:
+
+| Offered | When |
+|---|---|
+| Since last week | always (two snapshots is enough) |
+| 1, 3, 6, 9, 12, 18, 24 months | only when a real snapshot exists that far back |
+| All data (*N* weeks) | when the full span isn't already one of the above |
+
+A window the data cannot cover is **not offered**. That matters: the tool this
+borrows the idea from always *labelled* its window "6 months" even after
+silently falling back to the earliest row it had, which quietly changes what
+every number in the matrix means. Here the caption states the actual span —
+*"Rates measured from 2026-06-20 to 2026-09-05 — 11 weeks of movement"* — and
+the forecast horizon is picked the same way, in months: 3 / 6 / 9 / 12 / 18 / 24.
+
+### The rates, and the base each one is against
+
+A ratio is only as honest as its denominator, so each is named:
 
 ```
-debt rate = mean(introduced)      new findings arriving each week
-fix rate  = mean(fixed)           findings closed each week
+debtIncrease = (current − prior) / prior          change in the backlog
+clearedShare = fixedInWindow / prior              how much of it was cleared
+keepUp       = fixedInWindow / introducedInWindow arrivals actually kept up with
 ```
 
-They are never expressed as a percentage of the backlog. On the sample data the
-backlog grows from ~1.9M to ~2.9M over twelve weeks, and a rate drawn against
-that moving base produces an axis running from −44% to 2,065% with every real
-week flattened into the floor — which is exactly the defect this version was
-built to fix. The one ratio that survives a moving base is `fixRate / debtRate`,
-stated in words: *"for every 100 findings that arrive, the team clears 39."*
+The first two share a base and can be read together; the third is the only one
+with arrivals in the denominator, and the only one that answers *"are we
+keeping up"*. Alongside them, the two per-week **counts**:
+
+```
+debt rate = introducedInWindow / weeks    new findings arriving each week
+fix rate  = fixedInWindow / weeks         findings closed each week
+```
+
+The weekly chart plots those counts, never a percentage of the backlog. On the
+sample data the backlog grows from ~1.9M to ~2.9M in twelve weeks, and a rate
+drawn against that moving base produces an axis running from −44% to 2,065%
+with every real week flattened into the floor — the defect this version was
+built to fix. The ratio that survives a moving base is stated in words:
+*"for every 100 findings that arrive, the team clears 46."*
 
 ### The forecast
 
@@ -164,19 +191,49 @@ down, admit a higher false-positive rate, move the pace slider, and every
 total, table and chart recomputes with exactly the code that produced the
 numbers in the app.
 
-Its shape is deliberately short — four sections and three charts:
+Its shape is deliberately short — five sections and three charts, in the order
+a conversation actually goes:
 
-1. **Where the backlog stands** — four figures and one sentence, then open
-   findings over time and debt rate against fix rate.
+1. **Where the backlog stands** — the timeline picker, four figures, one sentence.
 2. **Choose what to fix** — the five slider boxes, each ending in its own
-   running credit total.
-3. **What it costs** — three summary cards and one matrix table.
-4. **How fast the debt dies** — the pace slider and the two-line forecast.
+   running credit total. These sit *above* the numbers they drive, so the first
+   thing in reach is the thing the customer wants to change.
+3. **What it costs** — four summary cards and the matrix.
+4. **How fast the debt dies** — the horizon picker, the pace slider, the
+   two-line forecast.
+5. **The trend behind the numbers** — the two history charts, last, because
+   they are evidence rather than the argument.
 
 What is **locked** and rendered read-only: credits per triage and credits per
-remediation. The rate card is stated in full in an appendix, next to the data
-provenance — file names, export dates, and the Checkmarx One filters each
-export was pulled with.
+remediation. They are stated in one line under the matrix, where they explain
+the two credit rows directly above them, rather than in an appendix nobody
+scrolls to.
+
+### The matrix
+
+Metrics down the side, severities across the top, Total on the right:
+
+| Metric | Critical | High | Medium | Low | Info | Total |
+|---|---|---|---|---|---|---|
+| Open backlog | | | | | | |
+| Debt increase *(window)* | | | | | | |
+| Cleared *(window)* | | | | | | |
+| Kept up with arrivals *(window)* | | | | | | |
+| Selected to triage | | | | | | |
+| False positive % | | | | | | |
+| True positives (est.) | | | | | | |
+| Triage credits | | | | | | |
+| Remediation credits | | | | | | |
+| **Total credits** | | | | | | |
+| Backlog after this plan | | | | | | |
+
+Reading down a column answers *"what does Critical cost"*; reading across a row
+answers *"where does the money go"*. Both get asked out loud, and a
+severity-per-row table only answers one of them.
+
+"Backlog after this plan" is today's backlog minus what the plan clears — a
+reduction, not a backlog at a future date. New findings keep arriving, which is
+what the forecast shows; the report says so on the line under the table.
 
 **Save as PDF** prints it: the sliders disappear and leave their values behind
 as plain text, the weekly table opens, and the tables reflow to the page.
@@ -236,8 +293,10 @@ variables, and refer to siblings as `CxModel.foo` / `CxCharts.foo`.
 
 - Arrival and fix rates are flat averages over the chosen window. A trended
   arrival model would be better for a team whose scan coverage is still growing
-  — on the sample data the window includes an onboarding spike that lifts the
-  debt rate well above the steady-state figure.
+  — on the sample data the widest window includes an onboarding spike that
+  lifts the debt rate well above the steady-state figure. Narrowing the
+  timeline is the lever for that, which is part of why it is a control rather
+  than a constant.
 - The weekly pace is one number shared across severities, and the forecast
   clears the selected scope without asking which severity goes first. That is a
   simplification: the cost table is exact, the ordering within the plan is not.
@@ -245,3 +304,39 @@ variables, and refer to siblings as `CxModel.foo` / `CxCharts.foo`.
   price differently for a customer, run the calculator once per engine.
 - The false-positive sliders are an estimate the customer owns. Nothing in the
   exports measures them.
+
+---
+
+## Prior art, and what was wrong with it
+
+This replaces a hand-built generator (`Checkmarx Fix Cost Forecaster v7`). Four
+things in it were worth keeping, and they are all here: the two sliders per
+severity, the month-based timeline picker, the metric-by-severity matrix, and
+the framing of debt increase and fix rate as the headline pair.
+
+Six things in it were wrong, and are fixed rather than copied:
+
+1. **Mismatched denominators.** Debt increase was divided by the *opening*
+   backlog, fix rate by the *closing* one, and the two were printed as adjacent
+   rows — which invites a subtraction that means nothing. Both now share the
+   opening backlog, and `keepUp` (fixes ÷ arrivals) is separate and labelled.
+2. **"Do nothing" grew at the net rate.** The no-action forecast advanced by
+   the average *net* monthly change, which already has historical fixes netted
+   out. Doing nothing means not fixing, so the line must grow by arrivals —
+   using net understates it by exactly the fix rate the team is sustaining, and
+   makes inaction look cheaper than it is.
+3. **The same double-count in the per-severity plan**, which subtracted the
+   planned fixes from a growth rate that already had fixes removed.
+4. **Windows that silently shrank but kept their label.** Asking for 6 months
+   with 3 months of data returned 3 months of movement still captioned
+   "6 months". Only supported windows are offered now, and the real span is
+   printed.
+5. **A rate chart on a moving base**, covered above.
+6. **Info dropped entirely.** Its severity list stopped at Low, so any
+   Informational findings vanished from the backlog total. All five are carried
+   here.
+
+Two further differences are choices rather than corrections: credit rates are
+one global pair here rather than per-severity (Checkmarx prices triage and
+remediation flat), and the sliders apply live rather than behind a per-severity
+*Apply* button.

@@ -26,8 +26,9 @@
       remediationCredits: CxModel.DEFAULTS.remediationCredits,
       falsePositive: Object.assign({}, CxModel.DEFAULTS.falsePositive),
     },
-    lookback: CxModel.DEFAULTS.lookbackWeeks,
-    horizon: CxModel.DEFAULTS.horizonWeeks,
+    windowWeeks: CxModel.monthsToWeeks(CxModel.DEFAULTS.windowMonths),
+    windowOptions: [],
+    horizonMonths: CxModel.DEFAULTS.horizonMonths,
     pace: null,            // null until the data can set a sensible default
     stats: null,
     cost: null,
@@ -227,7 +228,13 @@
 
     state.frames = CxModel.align(state.totals, state.fixed);
     showMessages(dataMessages());
-    state.stats = CxModel.stats(state.frames, state.lookback);
+
+    // Only offer timelines this dataset can actually cover, and snap the
+    // current choice to the closest one that survives.
+    state.windowOptions = CxModel.windowOptions(state.frames);
+    const resolved = CxModel.resolveWindow(state.frames, state.windowWeeks);
+    if (resolved) state.windowWeeks = resolved.weeks;
+    state.stats = CxModel.stats(state.frames, state.windowWeeks);
 
     if (!state.plan || !state.planTouched) {
       state.plan = CxModel.defaultPlan(state.stats, state.assumptions);
@@ -236,12 +243,45 @@
     }
     if (state.pace === null) state.pace = defaultPace();
 
+    renderWindowChips();
+    renderHorizonChips();
     renderSevGrid();
     computePlan();
     renderHistory();
+  }
 
-    $('horizon-out').textContent = String(state.horizon);
-    $('lookback-out').textContent = String(state.lookback);
+  /* ------------------------------------------------------------ timelines -- */
+
+  function renderWindowChips() {
+    $('window-chips').innerHTML = state.windowOptions.map((o) =>
+      `<button type="button" class="chip ${o.weeks === state.windowWeeks ? 'is-on' : ''}" ` +
+      `data-window="${o.weeks}" aria-pressed="${o.weeks === state.windowWeeks}">${o.label}</button>`).join('');
+    $('window-chips').querySelectorAll('button[data-window]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.windowWeeks = Number(button.dataset.window);
+        recompute();
+      });
+    });
+
+    const stats = state.stats;
+    $('window-caption').textContent =
+      `Rates measured from ${stats.windowStart} to ${stats.lastWeek} — ` +
+      `${stats.windowWeeks} week${stats.windowWeeks === 1 ? '' : 's'} of movement. ` +
+      `${state.frames.weeks.length} weekly snapshots available in total.`;
+  }
+
+  function renderHorizonChips() {
+    const options = [3, 6, 9, 12, 18, 24];
+    $('horizon-chips').innerHTML = options.map((m) =>
+      `<button type="button" class="chip ${m === state.horizonMonths ? 'is-on' : ''}" ` +
+      `data-horizon="${m}" aria-pressed="${m === state.horizonMonths}">${m} months</button>`).join('');
+    $('horizon-chips').querySelectorAll('button[data-horizon]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.horizonMonths = Number(button.dataset.horizon);
+        renderHorizonChips();
+        computePlan();
+      });
+    });
   }
 
   /** Everything downstream of the sliders — cheap enough to run on every drag. */
@@ -253,7 +293,7 @@
       debtRate: state.stats.total.debtRate,
       selected: state.cost.count,
       pace: state.pace,
-      horizonWeeks: state.horizon,
+      horizonWeeks: CxModel.monthsToWeeks(state.horizonMonths),
       startWeek: state.stats.lastWeek,
     });
 
@@ -343,7 +383,7 @@
     renderFlowChart(flow);
 
     $('trend-sub').textContent =
-      `${stats.weeksOfData} weeks of history, ${stats.firstWeek} → ${stats.lastWeek}.`;
+      `All ${stats.weeksOfData} weeks of history, ${stats.firstWeek} → ${stats.lastWeek}.`;
   }
 
   function kpiCard(label, value, sub, tone) {
@@ -356,28 +396,32 @@
 
   function renderKpis(stats) {
     const t = stats.total;
-    const losing = t.netWeekly > 0;
+    const losing = t.change > 0;
+
     $('kpis').innerHTML = [
       kpiCard('Open findings', CxModel.int(t.backlog), `as of ${stats.lastWeek}`),
-      kpiCard('Debt rate', `${CxModel.int(t.debtRate)}/wk`,
-        `new findings arriving, ${stats.weeksUsed}-week average`, 'bad'),
-      kpiCard('Fix rate', `${CxModel.int(t.fixRate)}/wk`,
-        `findings closed, ${stats.weeksUsed}-week average`, 'good'),
-      kpiCard('Net movement', `${CxModel.signed(t.netWeekly)}/wk`,
-        losing ? 'the backlog is growing' : 'the backlog is shrinking', losing ? 'bad' : 'good'),
+      kpiCard('Debt increase', CxModel.pct(t.debtIncrease, 1),
+        `${CxModel.signed(t.change)} findings since ${stats.windowStart}`, losing ? 'bad' : 'good'),
+      kpiCard('Cleared', CxModel.pct(t.clearedShare, 1),
+        `${CxModel.int(t.fixed)} closed, against the backlog at ${stats.windowStart}`, 'good'),
+      kpiCard('Kept up with', CxModel.pct(t.keepUp),
+        `${CxModel.int(t.fixed)} closed of ${CxModel.int(t.introduced)} that arrived`,
+        (t.keepUp || 0) >= 1 ? 'good' : 'bad'),
     ].join('');
   }
 
   function renderHeadline(stats) {
     const t = stats.total;
-    const perHundred = Math.round(t.keepUp * 100);
+    const perHundred = Math.round((t.keepUp || 0) * 100);
     const doubles = t.netWeekly > 0 ? t.backlog / t.netWeekly : null;
     $('headline').innerHTML = t.netWeekly > 0
       ? `For every <strong>100</strong> findings that arrive, the team clears <strong>${perHundred}</strong>. ` +
-        `The backlog grows by <strong>${CxModel.int(t.netWeekly)}</strong> a week — it doubles in about ` +
+        `That is <strong>${CxModel.int(t.debtRate)}</strong> in and <strong>${CxModel.int(t.fixRate)}</strong> out ` +
+        `a week, so the backlog grows by <strong>${CxModel.int(t.netWeekly)}</strong> a week — it doubles in about ` +
         `<strong>${CxModel.weeksAsDuration(doubles)}</strong> if nothing changes.`
-      : `The team clears <strong>${perHundred}</strong> of every 100 findings that arrive and is ` +
-        `${CxModel.int(Math.abs(t.netWeekly))} a week ahead. The backlog is shrinking on its own.`;
+      : `The team clears <strong>${perHundred}</strong> of every 100 findings that arrive — ` +
+        `<strong>${CxModel.int(t.debtRate)}</strong> in against <strong>${CxModel.int(t.fixRate)}</strong> out ` +
+        `a week. The backlog is shrinking on its own.`;
   }
 
   function renderBacklogChart(colors) {
@@ -457,14 +501,16 @@
   function renderCostKpis() {
     const cost = state.cost;
     const f = state.forecast;
-    const finish = f.weeksToFinishPlan;
+    const reduction = cost.backlog > 0 ? cost.count / cost.backlog : 0;
     $('cost-kpis').innerHTML = [
       kpiCard('Total cost', `${CxModel.int(cost.total)} cr`,
-        `${CxModel.int(cost.count)} findings selected · ${cost.creditsEach.toFixed(2)} credits each`),
-      kpiCard('Triage / remediation', `${CxModel.compact(cost.triage)} / ${CxModel.compact(cost.remediation)}`,
-        `${CxModel.int(cost.truePositives)} true positives need a fix, ${CxModel.int(cost.falsePositives)} do not`),
+        `${CxModel.int(cost.triage)} triage + ${CxModel.int(cost.remediation)} remediation`, 'accent'),
+      kpiCard('Selected to triage', CxModel.int(cost.count),
+        `of ${CxModel.int(cost.backlog)} open · ${cost.creditsEach.toFixed(2)} credits each`),
+      kpiCard('Backlog reduction', CxModel.pct(reduction, 1),
+        `leaves ${CxModel.int(cost.backlogAfter)} of today's backlog open`),
       kpiCard('Time to work through it',
-        cost.count > 0 ? CxModel.weeksAsDuration(finish) : '—',
+        cost.count > 0 ? CxModel.weeksAsDuration(f.weeksToFinishPlan) : '—',
         cost.count > 0 ? `at ${CxModel.int(state.pace)} findings a week` : 'nothing selected yet'),
     ].join('');
 
@@ -480,22 +526,69 @@
     });
   }
 
+  /**
+   * The matrix: one row per metric, one column per severity, a Total column.
+   * Reading down a column answers "what does Critical cost"; reading across a
+   * row answers "where does the money go". Both are questions people ask out
+   * loud in the meeting, which a severity-per-row table answers only one of.
+   */
   function renderCostTable() {
     const cost = state.cost;
+    const stats = state.stats;
     const colors = CxBrand.severityColors();
-    const head = ['Severity', 'Open', 'To triage', 'FP %', 'True positives',
-      'Triage credits', 'Remediation credits', 'Total credits'];
-    const rows = cost.rows.map((r) => [
-      `${severityDot(r.severity, colors)}${r.severity}`,
-      CxModel.int(r.backlog), CxModel.int(r.selected), `${Math.round(r.fp)}%`,
-      CxModel.int(r.truePositives), CxModel.int(r.triage), CxModel.int(r.remediation),
-      `<strong>${CxModel.int(r.total)}</strong>`,
-    ]);
-    const foot = ['Total', CxModel.int(cost.backlog), CxModel.int(cost.count),
-      cost.count > 0 ? `${Math.round((cost.falsePositives / cost.count) * 100)}%` : '—',
-      CxModel.int(cost.truePositives), CxModel.int(cost.triage), CxModel.int(cost.remediation),
-      `<strong>${CxModel.int(cost.total)}</strong>`];
-    $('table-cost').innerHTML = table(head, rows, foot);
+    const SEVS = SEVERITIES;
+    const windowLabel = windowName();
+
+    const head = ['<th style="text-align:left">Metric</th>']
+      .concat(SEVS.map((s) =>
+        `<th><span class="sev-head-cell">${severityDot(s, colors)}${s}</span></th>`))
+      .concat(['<th class="total-col">Total</th>']).join('');
+
+    const row = (label, cells, total, cls) =>
+      `<tr class="${cls || ''}"><td>${label}</td>` +
+      cells.map((c) => `<td>${c}</td>`).join('') +
+      `<td class="total-col">${total}</td></tr>`;
+
+    const rows = [
+      row('Open backlog', SEVS.map((s) => CxModel.int(stats.bySeverity[s].backlog)),
+        CxModel.int(stats.total.backlog)),
+      row(`Debt increase (${windowLabel})`,
+        SEVS.map((s) => CxModel.pct(stats.bySeverity[s].debtIncrease, 1)),
+        CxModel.pct(stats.total.debtIncrease, 1), 'is-muted'),
+      row(`Cleared (${windowLabel})`,
+        SEVS.map((s) => CxModel.pct(stats.bySeverity[s].clearedShare, 1)),
+        CxModel.pct(stats.total.clearedShare, 1), 'is-muted'),
+      row(`Kept up with arrivals (${windowLabel})`,
+        SEVS.map((s) => CxModel.pct(stats.bySeverity[s].keepUp)),
+        CxModel.pct(stats.total.keepUp), 'is-muted'),
+      row('Selected to triage', SEVS.map((s) => CxModel.int(cost.bySeverity[s].selected)),
+        CxModel.int(cost.count), 'is-highlight'),
+      row('False positive %', SEVS.map((s) => `${Math.round(cost.bySeverity[s].fp)}%`),
+        cost.count > 0 ? `${Math.round((cost.falsePositives / cost.count) * 100)}%` : '—', 'is-muted'),
+      row('True positives (est.)', SEVS.map((s) => CxModel.int(cost.bySeverity[s].truePositives)),
+        CxModel.int(cost.truePositives)),
+      row(`Triage credits (${state.assumptions.triageCredits}/item)`,
+        SEVS.map((s) => CxModel.int(cost.bySeverity[s].triage)), CxModel.int(cost.triage)),
+      row(`Remediation credits (${state.assumptions.remediationCredits}/true positive)`,
+        SEVS.map((s) => CxModel.int(cost.bySeverity[s].remediation)), CxModel.int(cost.remediation)),
+      row('Total credits', SEVS.map((s) => `<strong>${CxModel.int(cost.bySeverity[s].total)}</strong>`),
+        `<strong>${CxModel.int(cost.total)}</strong>`, 'is-total'),
+      row("Backlog after this plan", SEVS.map((s) => CxModel.int(cost.bySeverity[s].backlogAfter)),
+        CxModel.int(cost.backlogAfter)),
+    ].join('');
+
+    $('table-cost').innerHTML =
+      `<table class="data matrix"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>` +
+      '<p class="hint" style="margin-top:10px">' +
+      '“Backlog after this plan” is today’s backlog minus what the plan clears. ' +
+      'It is not a backlog at a future date — new findings keep arriving, which is what the forecast below shows.' +
+      '</p>';
+  }
+
+  /** Short form of the chosen window, for use inside a table label. */
+  function windowName() {
+    const match = state.windowOptions.find((o) => o.weeks === state.windowWeeks);
+    return match ? match.short : `${state.windowWeeks} weeks`;
   }
 
   function renderForecast() {
@@ -522,7 +615,8 @@
       `<span class="item"><span class="swatch line" style="background:${scenario.target}"></span>This plan at ${CxModel.int(state.pace)}/week</span>`;
 
     $('forecast-sub').textContent =
-      `Both futures take the same ${CxModel.int(f.arrivals)} new findings a week. Only the pace differs.`;
+      `Next ${state.horizonMonths} months. Both futures take the same ${CxModel.int(f.arrivals)} ` +
+      'new findings a week — measured, not assumed. Only the pace differs.';
 
     if (f.scope <= 0) {
       $('forecast-note').innerHTML =
@@ -566,8 +660,9 @@
       frames: state.frames,
       plan: state.plan,
       assumptions: state.assumptions,
-      lookback: state.lookback,
-      horizon: state.horizon,
+      windowWeeks: state.windowWeeks,
+      windowOptions: state.windowOptions,
+      horizonMonths: state.horizonMonths,
       pace: state.pace,
       palette: {
         severity: CxBrand.severity,
@@ -654,17 +749,8 @@
       state.assumptions.remediationCredits = Math.max(0, Number($('rate-remediation').value) || 0);
       if (state.frames) computePlan();
     });
-    $('lookback').addEventListener('input', () => {
-      state.lookback = Number($('lookback').value);
-      if (state.frames) recompute();
-    });
     $('pace').addEventListener('input', () => {
       state.pace = Number($('pace').value);
-      if (state.frames) computePlan();
-    });
-    $('horizon').addEventListener('input', () => {
-      state.horizon = Number($('horizon').value);
-      $('horizon-out').textContent = String(state.horizon);
       if (state.frames) computePlan();
     });
 
@@ -703,11 +789,17 @@
       const next = CxBrand.currentTheme() === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('cx-theme', next); } catch (_) { /* private mode */ }
-      if (state.frames) { renderSevGrid(); computePlan(); renderHistory(); }
+      if (state.frames) redraw();
     });
-    CxBrand.onThemeChange(() => {
-      if (state.frames) { renderSevGrid(); computePlan(); renderHistory(); }
-    });
+    CxBrand.onThemeChange(() => { if (state.frames) redraw(); });
+
+    function redraw() {
+      renderWindowChips();
+      renderHorizonChips();
+      renderSevGrid();
+      computePlan();
+      renderHistory();
+    }
 
     try {
       const saved = localStorage.getItem('cx-theme');

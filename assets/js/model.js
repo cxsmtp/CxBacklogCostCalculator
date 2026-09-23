@@ -32,8 +32,15 @@ window.CxModel = {
     triageCredits: 1,
     remediationCredits: 3,
     falsePositive: { Critical: 15, High: 25, Medium: 40, Low: 60, Info: 90 },
-    lookbackWeeks: 8,
-    horizonWeeks: 52,
+    windowMonths: 3,
+    horizonMonths: 12,
+  },
+
+  /* A month is not a whole number of weeks, and the exports are weekly. */
+  WEEKS_PER_MONTH: 4.345,
+
+  monthsToWeeks(months) {
+    return Math.max(1, Math.round(months * CxModel.WEEKS_PER_MONTH));
   },
 
   /* ------------------------------------------------------------- utilities -- */
@@ -129,56 +136,124 @@ window.CxModel = {
     return out;
   },
 
+  /* --------------------------------------------------------------- windows -- */
+
+  /**
+   * The timeline choices this dataset can actually support.
+   *
+   * A window is only offered when there is a real snapshot that far back. The
+   * utility this replaces always *labelled* its window "6 months" even when it
+   * had silently fallen back to the earliest row it had, which quietly changes
+   * what every rate in the matrix means. Here a window that the data cannot
+   * cover is not offered at all, and the ones that are carry the real span.
+   */
+  windowOptions(frames) {
+    const weeks = frames.weeks;
+    const span = weeks.length - 1;            // usable steps between snapshots
+    if (span < 1) return [];
+
+    const options = [{ weeks: 1, months: null, label: 'Since last week', short: 'last week' }];
+    for (const months of [1, 3, 6, 9, 12, 18, 24]) {
+      const w = CxModel.monthsToWeeks(months);
+      if (w > span) break;
+      const name = months === 1 ? '1 month' : `${months} months`;
+      options.push({ weeks: w, months, label: name, short: name });
+    }
+    if (!options.some((o) => o.weeks === span)) {
+      options.push({
+        weeks: span,
+        months: null,
+        label: `All data (${span + 1} weeks)`,
+        short: `all ${span + 1} weeks`,
+      });
+    }
+    return options;
+  },
+
+  /** Snap a requested window to the closest one this dataset can support. */
+  resolveWindow(frames, requestedWeeks) {
+    const options = CxModel.windowOptions(frames);
+    if (!options.length) return null;
+    let best = options[0];
+    for (const option of options) {
+      if (Math.abs(option.weeks - requestedWeeks) < Math.abs(best.weeks - requestedWeeks)) best = option;
+    }
+    return best;
+  },
+
   /* ---------------------------------------------------------------- stats -- */
 
   /**
-   * The two headline rates, per severity and rolled up, averaged over the last
-   * `lookbackWeeks` weeks.
+   * Every rate the report quotes, over one chosen window.
    *
-   *   debtRate  findings arriving each week
-   *   fixRate   findings cleared each week
+   * The window runs from a real snapshot (`prior`) to the latest one, and
+   * every ratio is stated against a base that is named, because the utility
+   * this replaces got exactly that wrong: it divided the debt increase by the
+   * OPENING backlog and the fix rate by the CLOSING one, then printed them as
+   * adjacent rows, which invites a subtraction that means nothing. Here:
    *
-   * Both are counts, never percentages of a moving base — a rate expressed
-   * against a backlog that grew by two orders of magnitude is unreadable and
-   * was the single biggest defect in the report this one replaces. The one
-   * ratio that is safe to quote is fixRate / debtRate: how many of every
-   * hundred arrivals the team actually clears.
+   *   debtIncrease  (current - prior) / prior      change in the backlog
+   *   clearedShare  fixedInWindow / prior          how much of it was cleared
+   *   keepUp        fixedInWindow / introduced     arrivals actually kept up with
+   *
+   * The first two share a base and can be read together. The third is the only
+   * one that answers "are we keeping up", and it is the only one with arrivals
+   * in the denominator.
    */
-  stats(frames, lookbackWeeks) {
+  stats(frames, windowWeeks) {
     const weeks = frames.weeks;
-    const lastIndex = weeks.length - 1;
-    const from = Math.max(1, weeks.length - (lookbackWeeks || CxModel.DEFAULTS.lookbackWeeks));
+    const last = weeks.length - 1;
+    const span = Math.max(1, Math.min(windowWeeks || CxModel.monthsToWeeks(CxModel.DEFAULTS.windowMonths), last));
+    const from = Math.max(0, last - span);
+    const steps = last - from;
 
     const bySeverity = {};
     for (const s of CxModel.SEVERITIES) {
-      const debtRate = CxModel.mean(frames.introduced[s].slice(from));
-      const fixRate = CxModel.mean(frames.fixed[s].slice(from));
+      const current = frames.open[s][last] ?? 0;
+      const prior = frames.open[s][from] ?? 0;
+      const introduced = CxModel.sum(frames.introduced[s].slice(from + 1, last + 1));
+      const fixed = CxModel.sum(frames.fixed[s].slice(from + 1, last + 1));
       bySeverity[s] = {
         severity: s,
-        backlog: frames.open[s][lastIndex] ?? 0,
-        debtRate,
-        fixRate,
-        netWeekly: debtRate - fixRate,
-        keepUp: debtRate > 0 ? fixRate / debtRate : (fixRate > 0 ? 1 : 0),
+        backlog: current,
+        prior,
+        introduced,
+        fixed,
+        change: current - prior,
+        debtIncrease: prior > 0 ? (current - prior) / prior : null,
+        clearedShare: prior > 0 ? fixed / prior : null,
+        keepUp: introduced > 0 ? fixed / introduced : (fixed > 0 ? 1 : null),
+        debtRate: steps > 0 ? introduced / steps : 0,
+        fixRate: steps > 0 ? fixed / steps : 0,
+        netWeekly: steps > 0 ? (introduced - fixed) / steps : 0,
       };
     }
 
     const roll = (key) => CxModel.sum(CxModel.SEVERITIES.map((s) => bySeverity[s][key]));
-    const debtRate = roll('debtRate');
-    const fixRate = roll('fixRate');
+    const backlog = roll('backlog');
+    const prior = roll('prior');
+    const introduced = roll('introduced');
+    const fixed = roll('fixed');
 
     return {
       bySeverity,
       weeksOfData: weeks.length,
-      weeksUsed: weeks.length - from,
+      windowWeeks: steps,
       firstWeek: weeks[0],
-      lastWeek: weeks[lastIndex],
+      windowStart: weeks[from],
+      lastWeek: weeks[last],
       total: {
-        backlog: roll('backlog'),
-        debtRate,
-        fixRate,
-        netWeekly: debtRate - fixRate,
-        keepUp: debtRate > 0 ? fixRate / debtRate : (fixRate > 0 ? 1 : 0),
+        backlog,
+        prior,
+        introduced,
+        fixed,
+        change: backlog - prior,
+        debtIncrease: prior > 0 ? (backlog - prior) / prior : null,
+        clearedShare: prior > 0 ? fixed / prior : null,
+        keepUp: introduced > 0 ? fixed / introduced : (fixed > 0 ? 1 : null),
+        debtRate: steps > 0 ? introduced / steps : 0,
+        fixRate: steps > 0 ? fixed / steps : 0,
+        netWeekly: steps > 0 ? (introduced - fixed) / steps : 0,
       },
     };
   },
@@ -252,6 +327,11 @@ window.CxModel = {
         total: triageCost + remedCost,
         creditsEach: selected > 0 ? (triageCost + remedCost) / selected : 0,
         deferred: backlog - selected,
+        /* What today's backlog drops to once this plan is worked through.
+         * Both true and false positives leave: the false ones are dispositioned,
+         * the real ones are fixed. It is a reduction of TODAY's backlog, not a
+         * backlog at a future date — arrivals are handled by the forecast. */
+        backlogAfter: backlog - selected,
       });
 
       count += selected;
@@ -272,6 +352,7 @@ window.CxModel = {
       creditsEach: count > 0 ? (triage + remediation) / count : 0,
       backlog: CxModel.sum(rows.map((r) => r.backlog)),
       deferred: CxModel.sum(rows.map((r) => r.deferred)),
+      backlogAfter: CxModel.sum(rows.map((r) => r.backlogAfter)),
     };
   },
 
