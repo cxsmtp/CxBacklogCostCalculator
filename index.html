@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Checkmarx Backlog Cost Calculator</title>
-<meta name="description" content="Turn Checkmarx One vulnerability exports into a credit forecast: triage and remediation cost, backlog projection, and an interactive customer report.">
+<meta name="description" content="Turn Checkmarx One vulnerability exports into a credit forecast: what the backlog costs to triage and remediate, how fast it can be cleared, and an interactive report for the customer.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236B34FC'/%3E%3Cpath d='M9 16.4l4.6 4.6L23 10' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/css/app.css">
 </head>
@@ -67,78 +67,17 @@
     <div id="input-messages" style="margin-top:14px"></div>
   </section>
 
-  <!-- ============================================================ step 2 -- -->
-  <section class="card hidden" id="card-assumptions">
-    <header>
-      <span class="step-badge">2</span>
-      <h2>Scope &amp; assumptions</h2>
-      <span class="sub">These drive every number below. They are locked into the exported report.</span>
-    </header>
-
-    <div class="grid two">
-      <div>
-        <h3 style="margin-bottom:8px">What is the plan for each severity?</h3>
-        <p class="hint" style="margin-bottom:10px">
-          <strong>Triage + remediate</strong> takes a severity to zero.
-          <strong>Triage only</strong> pays to disposition the findings, so the
-          false positives leave and the real ones stay on the books by choice.
-          <strong>Not in plan</strong> costs nothing and moves nothing.
-        </p>
-        <div id="scope-modes"></div>
-
-        <h3 style="margin:20px 0 8px">Credit rates</h3>
-        <div class="grid two">
-          <label class="field">
-            <span>Credits per triage</span>
-            <input type="number" id="rate-triage" min="0" step="0.5" value="1">
-          </label>
-          <label class="field">
-            <span>Credits per remediation</span>
-            <input type="number" id="rate-remediation" min="0" step="0.5" value="3">
-          </label>
-        </div>
-        <p class="hint" style="margin-top:8px">
-          Every finding is triaged. Only the true positives are remediated —
-          false positives cost one triage credit and stop there.
-        </p>
-
-        <h3 style="margin:20px 0 8px">History window</h3>
-        <label class="field">
-          <span>Average the arrival and fix rates over the last
-            <output id="lookback-out">8</output> weeks</span>
-          <input type="range" id="lookback" min="2" max="26" step="1" value="8">
-        </label>
-      </div>
-
-      <div>
-        <h3 style="margin-bottom:8px">True-positive rate after triage</h3>
-        <p class="hint" style="margin-bottom:10px">
-          The share of findings that turn out to be real and need a fix. Defaults
-          are typical AppSec figures — replace them with your own triage history
-          the moment you have it.
-        </p>
-        <div id="tp-rows"></div>
-
-        <h3 style="margin:20px 0 8px">Optional: credit price</h3>
-        <label class="field">
-          <span>Currency value of one credit <span class="hint">(leave blank to stay in credits only)</span></span>
-          <input type="number" id="credit-price" min="0" step="0.01" placeholder="e.g. 0.75">
-        </label>
-      </div>
-    </div>
-  </section>
-
   <!-- =========================================================== results -- -->
   <div id="results" class="hidden">
 
+    <!-- ---------------------------------------------------- where it stands -- -->
     <p class="section-title">Where the backlog stands</p>
     <div class="grid four" id="kpis"></div>
     <div class="card" style="margin-top:14px"><p class="headline" id="headline"></p></div>
 
-    <p class="section-title">Backlog trend and projection</p>
     <section class="card chart-card">
       <header>
-        <h2>Open findings by severity</h2>
+        <h2>Open findings over time</h2>
         <span class="sub" id="trend-sub"></span>
       </header>
       <div class="chart-wrap" id="chart-backlog"></div>
@@ -150,8 +89,8 @@
 
     <section class="card chart-card">
       <header>
-        <h2>Arrivals against clearances, week by week</h2>
-        <span class="sub">New findings are derived: open(t) − open(t−1) + fixed(t).</span>
+        <h2>Debt rate against fix rate</h2>
+        <span class="sub">Findings arriving each week against findings cleared each week — counts, not percentages.</span>
       </header>
       <div class="chart-wrap" id="chart-flow"></div>
       <div class="legend" id="legend-flow"></div>
@@ -160,93 +99,91 @@
       </details>
     </section>
 
-    <p class="section-title">How fast can the debt be killed?</p>
+    <!-- ----------------------------------------------------------- the plan -- -->
+    <p class="section-title">Choose what to fix</p>
     <section class="card">
       <header>
-        <h2>Set the pace</h2>
-        <span class="spacer"></span>
+        <span class="step-badge">2</span>
+        <h2>Adjust the plan</h2>
+        <span class="sub">How many of each severity to put through triage, and how many of those come back false positive.</span>
       </header>
-      <div class="grid three">
+      <div class="sev-grid" id="sev-grid"></div>
+
+      <div class="plan-tools">
+        <label class="field">
+          <span>Set the false-positive rate for every severity at once:
+            <output id="fp-all-out">—</output></span>
+          <input type="range" id="fp-all" min="0" max="100" step="1" value="30">
+        </label>
+        <div class="plan-buttons">
+          <button type="button" class="ghost" id="btn-all">Select all</button>
+          <button type="button" class="ghost" id="btn-none">Select none</button>
+          <button type="button" class="ghost" id="btn-critical-high">Critical + High only</button>
+          <button type="button" class="ghost" id="btn-reset">Reset</button>
+        </div>
+      </div>
+
+      <details class="table-view">
+        <summary>Credit rates and history window</summary>
+        <div class="grid three" style="margin-top:12px">
+          <label class="field">
+            <span>Credits per triage</span>
+            <input type="number" id="rate-triage" min="0" step="0.5" value="1">
+          </label>
+          <label class="field">
+            <span>Credits per remediation</span>
+            <input type="number" id="rate-remediation" min="0" step="0.5" value="3">
+          </label>
+          <label class="field">
+            <span>Average the rates over the last <output id="lookback-out">8</output> weeks</span>
+            <input type="range" id="lookback" min="2" max="26" step="1" value="8">
+          </label>
+        </div>
+        <p class="hint" style="margin-top:10px">
+          Every selected finding is triaged. Only the true positives are remediated —
+          a false positive costs its triage credit and stops there. These rates are
+          locked and read-only in the exported report.
+        </p>
+      </details>
+    </section>
+
+    <!-- ---------------------------------------------------------- the cost -- -->
+    <p class="section-title">What it costs in Checkmarx credits</p>
+    <div class="grid three" id="cost-kpis"></div>
+
+    <section class="card" style="margin-top:14px">
+      <header>
+        <h2>Estimate</h2>
+        <span class="sub">Triage = selected × rate. Remediation = true positives × rate.</span>
+      </header>
+      <div class="table-scroll" id="table-cost"></div>
+    </section>
+
+    <!-- ------------------------------------------------------ how fast -- -->
+    <p class="section-title">How fast the debt dies</p>
+    <section class="card chart-card">
+      <header>
+        <h2>Backlog forecast</h2>
+        <span class="sub" id="forecast-sub"></span>
+      </header>
+      <div class="grid two" style="margin-bottom:6px">
         <label class="field">
           <span>Work through <output id="pace-out">0</output> findings per week</span>
           <input type="range" id="pace" min="0" max="100" step="1" value="50">
           <span class="hint" id="pace-hint"></span>
         </label>
         <label class="field">
-          <span>Or pick a deadline</span>
-          <select id="deadline">
-            <option value="13">Clear the backlog in 13 weeks (1 quarter)</option>
-            <option value="26" selected>Clear the backlog in 26 weeks (2 quarters)</option>
-            <option value="52">Clear the backlog in 52 weeks (1 year)</option>
-            <option value="104">Clear the backlog in 104 weeks (2 years)</option>
-          </select>
-          <span class="hint" id="deadline-hint"></span>
-          <button type="button" class="ghost" id="btn-match-deadline"
-                  style="margin-top:8px;padding:5px 11px;font-size:12px">Set the pace to meet it</button>
-        </label>
-        <label class="field">
           <span>Forecast horizon: <output id="horizon-out">52</output> weeks</span>
           <input type="range" id="horizon" min="8" max="156" step="4" value="52">
-          <span class="hint">Charts stop here; time-to-zero is solved analytically.</span>
+          <span class="hint">Time-to-clear is solved analytically, so it survives past the chart.</span>
         </label>
       </div>
+      <div class="chart-wrap" id="chart-forecast"></div>
+      <div class="legend" id="legend-forecast"></div>
+      <div class="callout" id="forecast-note" style="margin-top:14px"></div>
     </section>
 
-    <section class="card chart-card">
-      <header>
-        <h2>Backlog under four scenarios</h2>
-        <span class="sub">Same arrival rate throughout — only the pace changes.</span>
-      </header>
-      <div class="chart-wrap" id="chart-scenarios"></div>
-      <div class="legend" id="legend-scenarios"></div>
-      <div class="table-scroll" style="margin-top:14px" id="table-scenarios"></div>
-    </section>
-
-    <section class="card chart-card">
-      <header>
-        <h2>Projected backlog at the chosen pace</h2>
-        <span class="sub" id="projection-sub"></span>
-      </header>
-      <div class="chart-wrap" id="chart-projection"></div>
-      <div class="legend" id="legend-projection"></div>
-    </section>
-
-    <p class="section-title">What it costs in Checkmarx credits</p>
-    <div class="grid four" id="cost-kpis"></div>
-
-    <section class="card chart-card" style="margin-top:14px">
-      <header>
-        <h2>Cost to clear today's backlog</h2>
-        <span class="sub">Lighter segment = triage, solid segment = remediation.</span>
-      </header>
-      <div class="chart-wrap" id="chart-cost"></div>
-      <div class="legend" id="legend-cost"></div>
-      <div class="table-scroll" style="margin-top:14px" id="table-cost"></div>
-    </section>
-
-    <section class="card">
-      <header>
-        <h2>Budget check</h2>
-        <span class="sub">Worst-first: Critical is bought before High, and so on down.</span>
-      </header>
-      <div class="grid two">
-        <label class="field">
-          <span>If we had this many credits…</span>
-          <input type="number" id="budget-credits" min="0" step="1000" placeholder="e.g. 250000">
-        </label>
-        <div id="budget-result" class="callout">Enter a budget to see how far it goes.</div>
-      </div>
-    </section>
-
-    <section class="card chart-card">
-      <header>
-        <h2>Credit spend over time at the chosen pace</h2>
-        <span class="sub">Cumulative credits consumed, including the findings that arrive along the way.</span>
-      </header>
-      <div class="chart-wrap" id="chart-spend"></div>
-      <div class="legend" id="legend-spend"></div>
-    </section>
-
+    <!-- ------------------------------------------------------------ export -- -->
     <p class="section-title">Hand it to the customer</p>
     <section class="card no-print">
       <header>
@@ -254,10 +191,9 @@
         <h2>Export the interactive report</h2>
       </header>
       <p class="hint" style="margin-bottom:12px">
-        A single self-contained HTML file. The customer can switch severities and
-        whole scope-items on and off and watch the credit total move — but the
-        credit rates and true-positive assumptions behind each item are fixed and
-        read-only. It prints straight to PDF from the browser.
+        One self-contained HTML file. The customer moves the same two sliders per
+        severity and watches the credit total move — the credit rates behind each
+        finding are fixed and read-only. It prints straight to PDF from the browser.
       </p>
       <div class="grid three">
         <label class="field">

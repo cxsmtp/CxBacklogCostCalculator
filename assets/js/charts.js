@@ -124,13 +124,9 @@ window.CxCharts = {
 
   /* ------------------------------------------------------- stacked area ---- */
 
-  /**
-   * Backlog composition over time. `splitAt` marks where measured history ends
-   * and the projection begins; everything past it is drawn at lower opacity
-   * behind a labelled divider so a forecast never reads as a measurement.
-   */
+  /** Backlog composition over time — one band per severity, worst at the bottom. */
   stackedArea(opts) {
-    const { labels, series, splitAt, tipRows } = opts;
+    const { labels, series, tipRows } = opts;
     const f = CxCharts.frame(opts.id, opts);
     const n = labels.length;
     if (!n) return '';
@@ -153,19 +149,9 @@ window.CxCharts = {
       for (let i = 0; i < n; i++) baseline[i] = top[i];
     }
 
-    let divider = '';
-    if (splitAt !== undefined && splitAt !== null && splitAt >= 0 && splitAt < n) {
-      const x = xAt(splitAt);
-      divider =
-        `<rect class="cx-forecast-wash" x="${x.toFixed(1)}" y="${f.y0}" width="${(f.x0 + f.plotW - x).toFixed(1)}" height="${f.plotH}"/>` +
-        `<line class="cx-split" x1="${x.toFixed(1)}" y1="${f.y0}" x2="${x.toFixed(1)}" y2="${f.y0 + f.plotH}"/>` +
-        `<text class="cx-split-label" x="${(x + 6).toFixed(1)}" y="${f.y0 + 12}">projected</text>`;
-    }
-
     return CxCharts.open(f, 'cx-stacked') +
       CxCharts.yAxis(f, scale) +
       bands.join('') +
-      divider +
       CxCharts.xAxis(f, labels) +
       CxCharts.crosshair(f) +
       CxCharts.hitLayer(f, n, tipRows) +
@@ -175,22 +161,22 @@ window.CxCharts = {
   /* --------------------------------------------------------- grouped bars -- */
 
   /**
-   * Weekly arrivals against weekly clearances, plus the net line. One axis:
-   * all three are counts of vulnerabilities per week.
+   * Arrivals against clearances, week by week. Both series are counts of
+   * findings on one shared axis — never a percentage of a backlog that moves,
+   * which is what makes a rate chart unreadable the moment coverage changes.
    */
   flow(opts) {
-    const { labels, groups, line, tipRows } = opts;
+    const { labels, groups, tipRows } = opts;
     const f = CxCharts.frame(opts.id, opts);
     const n = labels.length;
     if (!n) return '';
 
-    const values = groups.flatMap((g) => g.values.filter((v) => v !== null));
-    if (line) values.push(...line.values.filter((v) => v !== null));
-    const scale = CxCharts.niceTicks(Math.min(0, ...values), Math.max(1, ...values), 4);
+    const values = groups.flatMap((g) => g.values.filter((v) => v !== null && isFinite(v)));
+    const scale = CxCharts.niceTicks(0, Math.max(1, ...values), 4);
 
     const band = f.plotW / n;
-    const gap = 2;                                   // the 2px surface gap
-    const barW = Math.max(2, (band * 0.62 - gap * (groups.length - 1)) / groups.length);
+    const gap = 2;
+    const barW = Math.max(2, (band * 0.64 - gap * (groups.length - 1)) / groups.length);
     const yAt = (v) => f.y0 + f.plotH - ((v - scale.min) / (scale.max - scale.min)) * f.plotH;
     const zero = yAt(0);
 
@@ -199,9 +185,9 @@ window.CxCharts = {
       const groupLeft = f.x0 + band * i + (band - (barW * groups.length + gap * (groups.length - 1))) / 2;
       groups.forEach((g, gi) => {
         const v = g.values[i];
-        if (v === null || v === undefined) return;
-        const y = Math.min(zero, yAt(v));
-        const h = Math.max(1, Math.abs(zero - yAt(v)));
+        if (v === null || v === undefined || !isFinite(v)) return;
+        const y = Math.min(zero, yAt(Math.max(0, v)));
+        const h = Math.max(1, Math.abs(zero - yAt(Math.max(0, v))));
         const x = groupLeft + gi * (barW + gap);
         bars.push(
           `<rect class="cx-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" ` +
@@ -210,28 +196,9 @@ window.CxCharts = {
       });
     });
 
-    let netLine = '';
-    if (line) {
-      const points = line.values
-        .map((v, i) => (v === null || v === undefined ? null : `${(f.x0 + band * (i + 0.5)).toFixed(1)},${yAt(v).toFixed(1)}`))
-        .filter(Boolean);
-      if (points.length > 1) {
-        netLine =
-          `<path class="cx-line" d="M${points.join(' L')}" fill="none" stroke="${line.color}" stroke-width="2"/>` +
-          points.map((p) => {
-            const [x, y] = p.split(',');
-            return `<circle class="cx-dot" cx="${x}" cy="${y}" r="3.5" fill="${line.color}"/>`;
-          }).join('');
-      }
-    }
-
-    const zeroRule = scale.min < 0
-      ? `<line class="cx-axis" x1="${f.x0}" y1="${zero.toFixed(1)}" x2="${f.x0 + f.plotW}" y2="${zero.toFixed(1)}"/>`
-      : '';
-
     return CxCharts.open(f, 'cx-flow') +
       CxCharts.yAxis(f, scale) +
-      bars.join('') + zeroRule + netLine +
+      bars.join('') +
       CxCharts.xAxis(f, labels) +
       CxCharts.crosshair(f) +
       CxCharts.hitLayer(f, n, tipRows) +
@@ -240,15 +207,15 @@ window.CxCharts = {
 
   /* ---------------------------------------------------------------- lines -- */
 
-  /** Scenario comparison: one line per scenario, endpoint direct-labelled. */
+  /** Forecast comparison: one line per future, endpoint direct-labelled. */
   lines(opts) {
-    const { labels, series, tipRows, yZero } = opts;
-    const f = CxCharts.frame(opts.id, Object.assign({ pad: { right: 96 } }, opts));
+    const { labels, series, tipRows } = opts;
+    const f = CxCharts.frame(opts.id, Object.assign({ pad: { right: 104 } }, opts));
     const n = labels.length;
     if (!n) return '';
 
     const values = series.flatMap((s) => s.values.filter((v) => v !== null && isFinite(v)));
-    const scale = CxCharts.niceTicks(yZero ? 0 : Math.min(...values), Math.max(1, ...values), 4);
+    const scale = CxCharts.niceTicks(0, Math.max(1, ...values), 4);
     const xAt = (i) => f.x0 + (n > 1 ? (i / (n - 1)) * f.plotW : f.plotW / 2);
     const yAt = (v) => f.y0 + f.plotH - ((v - scale.min) / (scale.max - scale.min)) * f.plotH;
 
@@ -259,7 +226,7 @@ window.CxCharts = {
       if (points.length < 2) return '';
       const last = points[points.length - 1].split(',');
       const dash = s.dashed ? ' stroke-dasharray="6 4"' : '';
-      return `<path class="cx-line" d="M${points.join(' L')}" fill="none" stroke="${s.color}" stroke-width="2"${dash}/>` +
+      return `<path class="cx-line" d="M${points.join(' L')}" fill="none" stroke="${s.color}" stroke-width="2.5"${dash}/>` +
         `<circle class="cx-dot" cx="${last[0]}" cy="${last[1]}" r="4" fill="${s.color}"/>` +
         `<text class="cx-endlabel" x="${(Number(last[0]) + 8).toFixed(1)}" y="${(Number(last[1]) + 4).toFixed(1)}" fill="${s.color}">${CxCharts.esc(s.endLabel || '')}</text>`;
     });
@@ -273,44 +240,12 @@ window.CxCharts = {
       '</svg>';
   },
 
-  /* ------------------------------------------------------- horizontal bars -- */
-
-  /** Credit cost per severity, split into triage and remediation. */
-  costBars(opts) {
-    const rows = opts.rows.filter((r) => r.total > 0);
-    if (!rows.length) return '<p class="cx-empty">Nothing in scope — every severity is switched off.</p>';
-
-    const rowH = 34;
-    const width = opts.width || CxCharts.W;
-    const pad = { top: 8, right: 90, bottom: 8, left: 82 };
-    const height = rows.length * rowH + pad.top + pad.bottom;
-    const plotW = width - pad.left - pad.right;
-    const max = Math.max(...rows.map((r) => r.total));
-
-    const parts = rows.map((r, i) => {
-      const y = pad.top + i * rowH + 6;
-      const h = rowH - 16;
-      const triageW = (r.triage / max) * plotW;
-      const remedW = (r.remediation / max) * plotW;
-      const tip = `${r.label}: ${CxModel.int(r.count)} findings · triage ${CxModel.int(r.triage)} cr · remediation ${CxModel.int(r.remediation)} cr`;
-      return `<g data-cx-tip="${CxCharts.esc(tip)}" class="cx-costrow">` +
-        `<text class="cx-tick" x="${pad.left - 10}" y="${y + h / 2 + 4}" text-anchor="end">${CxCharts.esc(r.label)}</text>` +
-        `<rect class="cx-bar" x="${pad.left}" y="${y}" width="${Math.max(0, triageW).toFixed(1)}" height="${h}" rx="4" fill="${r.color}" fill-opacity="0.45"/>` +
-        `<rect class="cx-bar" x="${(pad.left + triageW + 2).toFixed(1)}" y="${y}" width="${Math.max(0, remedW - 2).toFixed(1)}" height="${h}" rx="4" fill="${r.color}"/>` +
-        `<text class="cx-barvalue" x="${(pad.left + triageW + remedW + 10).toFixed(1)}" y="${y + h / 2 + 4}">${CxModel.compact(r.total)}</text>` +
-        `</g>`;
-    });
-
-    return `<svg class="cx-chart cx-cost" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img">` +
-      parts.join('') + '</svg>';
-  },
-
   /* -------------------------------------------------------------- tooltip -- */
 
   /**
-   * One delegated hover layer for every chart on the page. Keyboard focus
-   * shows the same content as the pointer, and values are duplicated in the
-   * table views, so the tooltip is an enhancement rather than the only route.
+   * One delegated hover layer for every chart on the page. Values are
+   * duplicated in the table views, so the tooltip is an enhancement rather
+   * than the only route to a number.
    */
   bind(root) {
     const scope = root || document;
@@ -338,7 +273,6 @@ window.CxCharts = {
       tip.style.left = `${Math.max(8, left)}px`;
       tip.style.top = `${top}px`;
 
-      // Park the crosshair on the hovered column.
       const svg = target.closest('svg');
       const crosshair = svg && svg.querySelector('.cx-crosshair');
       const x = target.getAttribute('data-cx-x');
