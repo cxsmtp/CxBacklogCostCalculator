@@ -3,14 +3,15 @@
  * HTML file.
  *
  * The report is not a screenshot of the app. It embeds the weekly data plus a
- * serialised copy of CxModel and CxCharts, so the customer can change the plan
- * — remediate a severity, triage it only, drop it, move the weekly pace — and
- * every number and chart recomputes with exactly the code that produced the
- * figures on screen.
+ * serialised copy of CxModel and CxCharts, so the customer can move two
+ * sliders per severity — how many findings to put through triage, and how many
+ * of those they expect to come back false positive — and every number, table
+ * and chart recomputes with exactly the code that produced the figures on
+ * screen.
  *
- * What the customer CANNOT change is the pricing: credits per triage, credits
- * per remediation, and the true-positive rates. Those arrive baked in and are
- * rendered read-only, so the scope is negotiable and the rate card is not.
+ * What the customer CANNOT change is the rate card: credits per triage and
+ * credits per remediation arrive baked in and are rendered read-only. The
+ * scope is negotiable; the price of a unit of work is not.
  *
  * No network, no libraries: the file opens from disk and prints straight to PDF.
  */
@@ -79,13 +80,14 @@ p{margin:0 0 10px}
 .masthead .meta{margin-left:auto;text-align:right;font-size:12.5px;color:var(--muted);white-space:nowrap}
 .masthead .customer{font-size:13px;font-weight:650;color:var(--brand);letter-spacing:.04em;text-transform:uppercase}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
-.card>header{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.card>header{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .card>header .sub{font-size:12.5px;color:var(--muted)}
 .section-title{font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:26px 0 12px}
 .grid{display:grid;gap:14px}
 .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:860px){.grid.two,.grid.four{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.grid.two,.grid.three,.grid.four{grid-template-columns:minmax(0,1fr)}}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
 .kpi .label{font-size:12px;color:var(--muted);font-weight:550}
 .kpi .value{font-size:28px;font-weight:680;letter-spacing:-.02em;margin-top:2px}
@@ -93,9 +95,11 @@ p{margin:0 0 10px}
 .kpi .note{font-size:12px;color:var(--ink-2);margin-top:2px}
 .kpi.accent{background:var(--brand-tint);border-color:color-mix(in srgb,var(--brand) 35%,transparent)}
 .kpi.accent .value{color:var(--brand)}
+.kpi.good .value{color:var(--good)}
+.kpi.bad .value{color:var(--bad)}
 .headline{font-size:15px;line-height:1.6;color:var(--ink-2)}
-.headline b{color:var(--ink);font-weight:650}
-.callout{border-left:3px solid var(--brand);background:var(--surface-2);border-radius:0 9px 9px 0;padding:11px 14px;font-size:13px;margin-bottom:12px}
+.headline b,.headline strong{color:var(--ink);font-weight:650}
+.callout{border-left:3px solid var(--brand);background:var(--surface-2);border-radius:0 9px 9px 0;padding:11px 14px;font-size:13px}
 .callout.warn{border-left-color:var(--warn)}
 .callout.good{border-left-color:var(--good)}
 table{border-collapse:collapse;width:100%;font-size:13px}
@@ -104,28 +108,35 @@ th:first-child,td:first-child{text-align:left;font-variant-numeric:normal}
 thead th{font-size:11.5px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom-color:var(--border-strong)}
 tfoot td{font-weight:650;border-top:1px solid var(--border-strong);border-bottom:none}
 .table-scroll{overflow-x:auto}
+details{border-top:1px solid var(--border);margin-top:14px;padding-top:10px}
+summary{cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:550}
 .sev-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px}
 .hint{font-size:12px;color:var(--muted)}
 .locked{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;color:var(--brand);background:var(--brand-tint);border-radius:999px;padding:2px 9px;white-space:nowrap}
-.segmented{display:inline-flex;border:1px solid var(--border-strong);border-radius:999px;overflow:hidden;background:var(--surface)}
-.segmented button{font:inherit;border:none;background:transparent;padding:5px 11px;font-size:12px;font-weight:550;color:var(--ink-2);cursor:pointer;white-space:nowrap}
-.segmented button+button{border-left:1px solid var(--border)}
-.segmented button.is-on{background:var(--brand);color:var(--brand-ink)}
-button.plain{font:inherit;font-weight:550;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);padding:7px 13px;cursor:pointer}
+.sev-grid{display:grid;gap:12px;grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:1000px){.sev-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.sev-grid{grid-template-columns:minmax(0,1fr)}}
+.sev-box{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.sev-head{display:flex;align-items:center;gap:2px;font-size:13px;font-weight:650;margin-bottom:10px;flex-wrap:wrap}
+.sev-open{margin-left:auto;font-size:11.5px;font-weight:550;color:var(--muted);white-space:nowrap}
+.slider-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:var(--muted);margin-top:8px}
+.slider-row output{font-size:13px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.sev-foot{margin:10px 0 0;padding-top:9px;border-top:2px solid var(--border);font-size:11.5px;color:var(--ink-2)}
+.plan-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:end;margin-top:16px}
+@media (max-width:760px){.plan-tools{grid-template-columns:minmax(0,1fr)}}
+.plan-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
+.field output{font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+button.plain{font:inherit;font-size:12.5px;font-weight:550;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);padding:6px 12px;cursor:pointer}
 button.plain:hover{background:var(--surface-2)}
 button.accent{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
-input[type=range]{width:100%;accent-color:var(--brand)}
-select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;padding:7px 10px;width:100%}
+input[type=range]{width:100%;accent-color:var(--brand);margin:0}
 .chart-wrap{width:100%;overflow-x:auto}
 .cx-chart{width:100%;height:auto;display:block;min-width:520px}
 .cx-grid{stroke:var(--grid);stroke-width:1}
 .cx-axis{stroke:var(--axis);stroke-width:1}
 .cx-tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
 .cx-endlabel{font-size:11.5px;font-weight:600}
-.cx-barvalue{fill:var(--ink-2);font-size:11.5px;font-weight:600}
-.cx-split{stroke:var(--brand);stroke-width:1.5}
-.cx-split-label{fill:var(--brand);font-size:10.5px;font-weight:650}
-.cx-forecast-wash{fill:var(--brand);opacity:.05}
 .cx-crosshair{stroke:var(--brand);stroke-width:1;pointer-events:none}
 .cx-hit{fill:transparent}
 .cx-empty{color:var(--muted);font-size:13px;padding:12px 0}
@@ -139,23 +150,17 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
 .cx-tooltip .t-row{display:flex;justify-content:space-between;gap:14px}
 .cx-tooltip .t-row span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
 .cx-tooltip .t-row.t-total{border-top:1px solid var(--border);margin-top:4px;padding-top:4px}
-.cx-tooltip .t-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
-.plan-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0}
-.plan-row+.plan-row{border-top:1px solid var(--border)}
-.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
 .footnote{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
-.trend.up{color:var(--bad);font-weight:600}
-.trend.down{color:var(--good);font-weight:600}
-.trend.flat{color:var(--muted);font-weight:600}
-.print-only{display:none}
 @media print{
  .no-print{display:none!important}
  body{background:#fff}
  .page{max-width:none;padding:0}
  .card{box-shadow:none;break-inside:avoid}
  .cx-chart{min-width:0}
- .segmented{display:none}
- .print-only{display:inline;font-weight:600}
+ input[type=range]{display:none}
+ .slider-row{color:var(--ink-2)}
+ details{display:block}
+ details>summary{display:none}
  th,td{white-space:normal;padding:6px 7px;font-size:11.5px}
  .table-scroll{overflow:visible}
  .legend{font-size:11px}
@@ -174,13 +179,11 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
     const R = window.REPORT;
     const $ = (id) => document.getElementById(id);
     const SEV = CxModel.SEVERITIES;
-    const esc = CxCharts.esc;
 
     const state = {
-      modes: Object.assign({}, R.modes),
+      plan: JSON.parse(JSON.stringify(R.plan)),
       pace: R.pace,
       horizon: R.horizon,
-      deadlineWeeks: R.deadlineWeeks,
     };
 
     const theme = () => {
@@ -192,553 +195,454 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
     const colors = () => R.palette.severity[theme()];
     const flowColors = () => R.palette.flow[theme()];
     const scenarioColors = () => R.palette.scenario[theme()];
-
-    const money = (credits) => {
-      if (!R.creditPrice || !isFinite(credits)) return null;
-      return (credits * R.creditPrice)
-        .toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-    };
     const dot = (severity) => `<span class="sev-dot" style="background:${colors()[severity]}"></span>`;
 
-    let stats = null;
-    let scenarios = null;
-    let forecast = null;
+    const stats = CxModel.stats(R.frames, R.lookback);
     let cost = null;
+    let forecast = null;
 
-    function compute() {
-      stats = CxModel.stats(R.frames, state.modes, R.lookback);
-
-      const counts = {};
-      for (const s of SEV) counts[s] = stats.bySeverity[s].backlog;
-      cost = CxModel.cost(counts, R.assumptions, state.modes);
-
-      scenarios = CxModel.scenarios(stats, state.modes, R.assumptions, {
-        horizonWeeks: state.horizon,
-        allocation: 'severity-first',
-        startWeek: stats.lastWeek,
-        targetWeeks: state.deadlineWeeks,
-        targetProcessing: state.pace,
-        targetLabel: 'Your chosen pace',
-      });
-      forecast = scenarios.find((sc) => sc.id === 'target').result;
+    function table(head, rows, foot) {
+      return `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead>` +
+        `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>` +
+        (foot ? `<tfoot><tr>${foot.map((c) => `<td>${c}</td>`).join('')}</tr></tfoot>` : '') +
+        '</table>';
     }
 
-    /* ----------------------------------------------------------- sections -- */
+    /* ------------------------------------------------------- history (fixed) -- */
 
     function renderKpis() {
-      const net = stats.scope.netWeekly;
-      const doubling = stats.scope.backlog > 0 && net < 0 ? stats.scope.backlog / -net : null;
-      const trend = Math.abs(net) < 1 ? 'flat' : (net < 0 ? 'up' : 'down');
-
+      const t = stats.total;
+      const losing = t.netWeekly > 0;
       $('kpis').innerHTML = `
         <div class="kpi accent">
-          <div class="label">Open findings in the plan</div>
-          <div class="value">${CxModel.compact(stats.scope.backlog)}</div>
-          <div class="note">${CxModel.int(stats.scope.backlog)} as of ${stats.lastWeek}</div>
+          <div class="label">Open findings</div>
+          <div class="value">${CxModel.compact(t.backlog)}</div>
+          <div class="note">${CxModel.int(t.backlog)} as of ${stats.lastWeek}</div>
         </div>
-        <div class="kpi">
-          <div class="label">Arriving each week</div>
-          <div class="value">${CxModel.compact(Math.max(0, stats.scope.avgIntroduced))}</div>
-          <div class="note">${R.lookback}-week average</div>
+        <div class="kpi bad">
+          <div class="label">Debt rate</div>
+          <div class="value">${CxModel.compact(t.debtRate)}<span style="font-size:15px">/wk</span></div>
+          <div class="note">new findings arriving, ${stats.weeksUsed}-week average</div>
         </div>
-        <div class="kpi">
-          <div class="label">Closed each week today</div>
-          <div class="value">${CxModel.compact(stats.scope.avgFixed)}</div>
-          <div class="note">${R.lookback}-week average</div>
+        <div class="kpi good">
+          <div class="label">Fix rate</div>
+          <div class="value">${CxModel.compact(t.fixRate)}<span style="font-size:15px">/wk</span></div>
+          <div class="note">findings closed, ${stats.weeksUsed}-week average</div>
         </div>
-        <div class="kpi">
+        <div class="kpi ${losing ? 'bad' : 'good'}">
           <div class="label">Net movement</div>
-          <div class="value small trend ${trend}">${CxModel.signed(-net)}/week</div>
-          <div class="note">${net > 0
-            ? `Shrinking — clear in ${CxModel.weeksAsDuration(stats.scope.backlog / net)} at today's pace.`
-            : (doubling ? `Growing — it doubles in ${CxModel.weeksAsDuration(doubling)}.` : 'Holding steady.')}</div>
+          <div class="value small">${CxModel.signed(t.netWeekly)}/week</div>
+          <div class="note">${losing ? 'the backlog is growing' : 'the backlog is shrinking'}</div>
         </div>`;
+
+      const perHundred = Math.round(t.keepUp * 100);
+      const doubles = t.netWeekly > 0 ? t.backlog / t.netWeekly : null;
+      $('headline').innerHTML = t.netWeekly > 0
+        ? `For every <strong>100</strong> findings that arrive, the team clears <strong>${perHundred}</strong>. ` +
+          `The backlog grows by <strong>${CxModel.int(t.netWeekly)}</strong> a week — at that rate it doubles in about ` +
+          `<strong>${CxModel.weeksAsDuration(doubles)}</strong>.`
+        : `The team clears <strong>${perHundred}</strong> of every 100 findings that arrive and is ` +
+          `<strong>${CxModel.int(Math.abs(t.netWeekly))}</strong> a week ahead. The backlog is shrinking on its own.`;
     }
 
-    function renderHeadline() {
-      const net = stats.scope.netWeekly;
-      const priced = money(cost.total);
-      const direction = net > 0
-        ? `fixes are outpacing new findings by <b>${CxModel.int(net)} a week</b>`
-        : `new findings are outpacing fixes by <b>${CxModel.int(-net)} a week</b>`;
-      const leftInPlace = cost.leftInPlace > 1
-        ? ` A further <b>${CxModel.int(cost.leftInPlace)}</b> real findings stay on the books by choice, in the severities set to triage only.`
-        : '';
+    function renderHistoryCharts() {
+      const sevColors = colors();
+      const flow = flowColors();
+      const weeks = R.frames.weeks;
+      const labels = weeks.map(CxCharts.shortDate);
 
-      $('headline').innerHTML =
-        `The plan below covers <b>${CxModel.int(stats.scope.backlog)}</b> open findings. ` +
-        `Over the last ${R.lookback} weeks ${direction}, while ${CxModel.int(stats.scope.avgFixed)} a week were closed. ` +
-        `Working through today's backlog costs <b>${CxModel.int(cost.total)} Checkmarx credits</b>` +
-        (priced ? ` (about <b>${priced}</b>)` : '') +
-        `: ${CxModel.int(cost.triage)} to triage every finding, and ${CxModel.int(cost.remediation)} to remediate the ` +
-        `${CxModel.int(cost.truePositives)} expected to be real.${leftInPlace}`;
-    }
-
-    function renderPlan() {
-      const priced = R.creditPrice;
-      const rows = SEV.map((s) => {
-        const row = cost.bySeverity[s];
-        const off = row.mode === 'none';
-        return `<tr${off ? ' style="opacity:.5"' : ''}>
-          <td>${dot(s)}${s}</td>
-          <td style="text-align:left">
-            <span class="segmented" role="group" aria-label="Plan for ${s}">
-              ${CxModel.MODES.map((m) => `<button type="button" data-severity="${s}" data-mode="${m}"
-                class="${row.mode === m ? 'is-on' : ''}" aria-pressed="${row.mode === m}">${CxModel.MODE_LABEL[m]}</button>`).join('')}
-            </span>
-            <span class="print-only">${CxModel.MODE_LABEL[row.mode]}</span>
-          </td>
-          <td>${CxModel.int(stats.bySeverity[s].backlog)}</td>
-          <td>${CxModel.pct(R.assumptions.truePositiveRate[s])}</td>
-          <td>${off ? '—' : row.creditsEach.toFixed(2)}</td>
-          <td>${CxModel.int(row.total)}</td>
-          ${priced ? `<td>${money(row.total) || '—'}</td>` : ''}
-        </tr>`;
+      const series = SEV.slice().reverse().map((s) => ({
+        key: s, color: sevColors[s], values: R.frames.open[s].map((v) => v || 0),
+      }));
+      const backlogTips = weeks.map((week, i) => {
+        const rows = SEV.map((s) =>
+          `<div class="t-row"><span>${s}</span><span>${CxModel.int(R.frames.open[s][i])}</span></div>`).join('');
+        const total = CxModel.sum(SEV.map((s) => R.frames.open[s][i] || 0));
+        return `<div class="t-title">${week}</div>${rows}` +
+          `<div class="t-row t-total"><span>Open</span><span>${CxModel.int(total)}</span></div>`;
       });
+      $('chart-backlog').innerHTML = CxCharts.stackedArea({
+        id: 'backlog', labels, series, tipRows: backlogTips, height: 280,
+      });
+      $('legend-backlog').innerHTML = SEV.map((s) =>
+        `<span class="item"><span class="swatch" style="background:${sevColors[s]}"></span>${s}</span>`).join('');
 
-      $('plan-table').innerHTML =
-        '<table><thead><tr><th>Severity</th><th style="text-align:left">What we will do</th><th>Open now</th>' +
-        '<th>TP&nbsp;%</th><th>Credits each</th><th>Line total</th>' +
-        (priced ? '<th>Approx. value</th>' : '') + '</tr></thead><tbody>' +
-        rows.join('') +
-        `</tbody><tfoot><tr><td>Total in plan</td><td style="text-align:left">—</td>` +
-        `<td>${CxModel.int(cost.count)}</td><td>—</td><td>${cost.blendedCreditsEach.toFixed(2)}</td>` +
-        `<td>${CxModel.int(cost.total)}</td>${priced ? `<td>${money(cost.total) || '—'}</td>` : ''}</tr></tfoot></table>`;
+      const introduced = CxModel.rollup(R.frames.introduced);
+      const cleared = CxModel.rollup(R.frames.fixed);
+      const flowTips = weeks.map((week, i) =>
+        `<div class="t-title">${week}</div>` +
+        `<div class="t-row"><span>Arrived</span><span>${CxModel.int(introduced[i])}</span></div>` +
+        `<div class="t-row"><span>Closed</span><span>${CxModel.int(cleared[i])}</span></div>` +
+        `<div class="t-row t-total"><span>Net</span><span>${CxModel.signed(
+          introduced[i] === null || cleared[i] === null ? null : introduced[i] - cleared[i])}</span></div>`);
+      $('chart-flow').innerHTML = CxCharts.flow({
+        id: 'flow', labels, height: 260, tipRows: flowTips,
+        groups: [
+          { key: 'in', color: flow.introduced, values: introduced },
+          { key: 'out', color: flow.cleared, values: cleared },
+        ],
+      });
+      $('legend-flow').innerHTML =
+        `<span class="item"><span class="swatch" style="background:${flow.introduced}"></span>New findings (debt rate)</span>` +
+        `<span class="item"><span class="swatch" style="background:${flow.cleared}"></span>Findings closed (fix rate)</span>`;
 
-      $('plan-table').querySelectorAll('button[data-mode]').forEach((button) => {
-        button.addEventListener('click', () => {
-          state.modes[button.dataset.severity] = button.dataset.mode;
-          rerender();
+      $('table-history').innerHTML = table(
+        ['Week ending', 'Open', 'Arrived', 'Closed', 'Net'],
+        weeks.map((week, i) => [
+          week,
+          CxModel.int(CxModel.sum(SEV.map((s) => R.frames.open[s][i] || 0))),
+          CxModel.int(introduced[i]),
+          CxModel.int(cleared[i]),
+          CxModel.signed(introduced[i] === null || cleared[i] === null ? null : introduced[i] - cleared[i]),
+        ]));
+    }
+
+    /* ------------------------------------------------------------- the plan -- */
+
+    function renderSliders() {
+      $('sev-grid').innerHTML = SEV.map((s) => {
+        const backlog = Math.round(stats.bySeverity[s].backlog);
+        const row = state.plan[s];
+        return `<div class="sev-box">
+          <div class="sev-head">${dot(s)}${s}<span class="sev-open">${CxModel.int(backlog)} open</span></div>
+          <div class="slider-row"><span>To triage</span><output data-sel-out="${s}">${CxModel.int(row.selected)}</output></div>
+          <input type="range" min="0" max="${backlog}" step="${Math.max(1, Math.round(backlog / 500))}"
+                 value="${row.selected}" data-sel="${s}" aria-label="Findings to triage for ${s}">
+          <div class="slider-row"><span>Est. false positive %</span><output data-fp-out="${s}">${row.fp}%</output></div>
+          <input type="range" min="0" max="100" step="1" value="${row.fp}" data-fp="${s}"
+                 aria-label="False-positive rate for ${s}">
+          <p class="sev-foot" data-cost-out="${s}"></p>
+        </div>`;
+      }).join('');
+
+      $('sev-grid').querySelectorAll('input[data-sel]').forEach((slider) => {
+        slider.addEventListener('input', () => {
+          state.plan[slider.dataset.sel].selected = Number(slider.value);
+          $('sev-grid').querySelector(`[data-sel-out="${slider.dataset.sel}"]`).textContent =
+            CxModel.int(Number(slider.value));
+          compute();
+        });
+      });
+      $('sev-grid').querySelectorAll('input[data-fp]').forEach((slider) => {
+        slider.addEventListener('input', () => {
+          state.plan[slider.dataset.fp].fp = Number(slider.value);
+          $('sev-grid').querySelector(`[data-fp-out="${slider.dataset.fp}"]`).textContent = `${slider.value}%`;
+          compute();
         });
       });
     }
 
-    function renderCostTiles() {
-      const influx = {};
-      for (const s of SEV) influx[s] = Math.max(0, stats.bySeverity[s].avgIntroduced);
-      const runRate = CxModel.cost(influx, R.assumptions, state.modes);
-      const priceNote = (credits) => {
-        const value = money(credits);
-        return value ? `<div class="note">${value}</div>` : '';
-      };
-
-      $('cost-kpis').innerHTML = `
-        <div class="kpi accent">
-          <div class="label">Clear today's backlog</div>
-          <div class="value">${CxModel.compact(cost.total)}</div>
-          <div class="note">credits, one off</div>
-          ${priceNote(cost.total)}
-        </div>
-        <div class="kpi">
-          <div class="label">Keep up with new findings</div>
-          <div class="value">${CxModel.compact(runRate.total)}</div>
-          <div class="note">credits per week · ${CxModel.compact(runRate.total * 52)} a year</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Total over ${state.horizon} weeks</div>
-          <div class="value">${CxModel.compact(forecast.totalCredits)}</div>
-          <div class="note">backlog and new findings combined</div>
-          ${priceNote(forecast.totalCredits)}
-        </div>
-        <div class="kpi">
-          <div class="label">Backlog left at the end</div>
-          <div class="value">${CxModel.compact(forecast.endTotal)}</div>
-          <div class="note">${forecast.weeksToZero !== null
-            ? `Reaches zero in ${CxModel.weeksAsDuration(forecast.weeksToZero)}.`
-            : 'Zero is out of reach with triage-only lines in the plan.'}</div>
-        </div>`;
+    function syncSliders() {
+      SEV.forEach((s) => {
+        const row = state.plan[s];
+        const sel = $('sev-grid').querySelector(`input[data-sel="${s}"]`);
+        const fp = $('sev-grid').querySelector(`input[data-fp="${s}"]`);
+        if (sel) { sel.value = String(row.selected); $('sev-grid').querySelector(`[data-sel-out="${s}"]`).textContent = CxModel.int(row.selected); }
+        if (fp) { fp.value = String(row.fp); $('sev-grid').querySelector(`[data-fp-out="${s}"]`).textContent = `${row.fp}%`; }
+      });
     }
 
-    function renderPace() {
-      const totalInflux = Math.max(0, stats.scope.avgIntroduced);
-      const required = CxModel.requiredProcessing(stats.scope.backlog, totalInflux, state.deadlineWeeks);
-      const paceMax = Math.max(10, Math.ceil(Math.max(required, stats.scope.avgFixed * 2, 1) / 10) * 10);
+    function setPlan(mutate) {
+      SEV.forEach((s) => mutate(s, state.plan[s], Math.round(stats.bySeverity[s].backlog)));
+      state.plan = CxModel.clampPlan(state.plan, stats);
+      syncSliders();
+      compute();
+    }
 
-      const slider = $('pace');
-      slider.max = String(paceMax);
-      slider.step = String(Math.max(1, Math.round(paceMax / 200)));
-      if (Number(slider.value) !== Math.min(state.pace, paceMax)) {
-        slider.value = String(Math.min(state.pace, paceMax));
-      }
-      state.pace = Number(slider.value);
+    /* ------------------------------------------------------------ the numbers -- */
+
+    function compute() {
+      cost = CxModel.cost(state.plan, stats, R.assumptions);
+
+      const ceiling = Math.max(10, stats.total.debtRate * 2, stats.total.fixRate * 2, cost.count / 13, 1);
+      const paceMax = Math.ceil(ceiling / 10) * 10;
+      const paceInput = $('pace');
+      paceInput.max = String(paceMax);
+      paceInput.step = String(Math.max(1, Math.round(paceMax / 200)));
+      paceInput.value = String(Math.min(state.pace, paceMax));
+      state.pace = Number(paceInput.value);
+
+      forecast = CxModel.forecast({
+        backlog: stats.total.backlog,
+        debtRate: stats.total.debtRate,
+        selected: cost.count,
+        pace: state.pace,
+        horizonWeeks: state.horizon,
+        startWeek: stats.lastWeek,
+      });
+
+      renderSummary();
+      renderMatrix();
+      renderForecast();
+    }
+
+    function renderSummary() {
+      $('summary-row').innerHTML = `
+        <div class="kpi accent">
+          <div class="label">Forecast cost</div>
+          <div class="value">${CxModel.compact(cost.total)}</div>
+          <div class="note">${CxModel.int(cost.total)} Checkmarx credits</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Findings in this plan</div>
+          <div class="value">${CxModel.compact(cost.count)}</div>
+          <div class="note">${CxModel.int(cost.truePositives)} expected to be real and need a fix</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Time to work through it</div>
+          <div class="value small">${cost.count > 0 ? CxModel.weeksAsDuration(forecast.weeksToFinishPlan) : '—'}</div>
+          <div class="note">${cost.count > 0
+            ? `at ${CxModel.int(state.pace)} findings a week`
+            : 'nothing selected yet'}</div>
+        </div>`;
+
+      const sevColors = colors();
+      cost.rows.forEach((row) => {
+        const foot = $('sev-grid').querySelector(`[data-cost-out="${row.severity}"]`);
+        if (!foot) return;
+        foot.innerHTML = row.selected === 0
+          ? 'Not in this plan — no credits.'
+          : `<strong>${CxModel.int(row.total)} credits</strong> · ${CxModel.int(row.truePositives)} to fix` +
+            (row.deferred > 0 ? ` · ${CxModel.int(row.deferred)} left open` : '');
+        foot.style.borderTopColor = sevColors[row.severity];
+      });
+    }
+
+    function renderMatrix() {
+      const head = ['Severity', 'Open', 'To triage', 'FP %', 'True positives',
+        'Triage credits', 'Remediation credits', 'Total credits'];
+      const rows = cost.rows.map((r) => [
+        `${dot(r.severity)}${r.severity}`,
+        CxModel.int(r.backlog), CxModel.int(r.selected), `${Math.round(r.fp)}%`,
+        CxModel.int(r.truePositives), CxModel.int(r.triage), CxModel.int(r.remediation),
+        `<strong>${CxModel.int(r.total)}</strong>`,
+      ]);
+      const foot = ['Total', CxModel.int(cost.backlog), CxModel.int(cost.count),
+        cost.count > 0 ? `${Math.round((cost.falsePositives / cost.count) * 100)}%` : '—',
+        CxModel.int(cost.truePositives), CxModel.int(cost.triage), CxModel.int(cost.remediation),
+        `<strong>${CxModel.int(cost.total)}</strong>`];
+      $('table-cost').innerHTML = table(head, rows, foot);
+    }
+
+    function renderForecast() {
+      const scenario = scenarioColors();
+      const labels = forecast.weeks.map((w) => CxCharts.shortDate(w.date));
+      const series = [
+        { key: 'nothing', color: scenario.nothing, dashed: true,
+          values: forecast.weeks.map((w) => w.noAction), endLabel: CxModel.compact(forecast.endNoAction) },
+        { key: 'plan', color: scenario.target,
+          values: forecast.weeks.map((w) => w.withPlan), endLabel: CxModel.compact(forecast.endWithPlan) },
+      ];
+      const tips = forecast.weeks.map((w) =>
+        `<div class="t-title">Week ${w.week} — ${CxCharts.shortDate(w.date)}</div>` +
+        `<div class="t-row"><span>Do nothing</span><span>${CxModel.int(w.noAction)}</span></div>` +
+        `<div class="t-row"><span>With this plan</span><span>${CxModel.int(w.withPlan)}</span></div>` +
+        `<div class="t-row t-total"><span>Difference</span><span>${CxModel.int(w.noAction - w.withPlan)}</span></div>`);
+
+      $('chart-forecast').innerHTML = CxCharts.lines({
+        id: 'forecast', labels, series, tipRows: tips, height: 280,
+      });
+      $('legend-forecast').innerHTML =
+        `<span class="item"><span class="swatch line" style="background:${scenario.nothing}"></span>Do nothing</span>` +
+        `<span class="item"><span class="swatch line" style="background:${scenario.target}"></span>This plan at ${CxModel.int(state.pace)}/week</span>`;
 
       $('pace-out').textContent = CxModel.int(state.pace);
-      $('pace-note').innerHTML =
-        `At ${CxModel.int(state.pace)} findings a week the backlog in the plan ` +
-        (forecast.weeksToZero !== null
-          ? `reaches zero in <b>${CxModel.weeksAsDuration(forecast.weeksToZero)}</b>.`
-          : `settles at <b>${CxModel.int(forecast.endTotal)}</b> — the triage-only lines keep their real findings.`) +
-        ` Today's measured pace is ${CxModel.int(stats.scope.avgFixed)} a week, against ` +
-        `${CxModel.int(totalInflux)} arriving.`;
-      $('deadline-note').textContent =
-        `Clearing in ${state.deadlineWeeks} weeks needs ${CxModel.int(required)} findings a week.`;
-    }
+      $('horizon-out').textContent = String(state.horizon);
 
-    /* -------------------------------------------------------------- charts -- */
-
-    function renderBacklogChart() {
-      const c = colors();
-      const history = R.frames.weeks;
-      const forecastWeeks = forecast.weeks;
-      const labels = history.concat(forecastWeeks.map((w) => w.date));
-      const inScope = CxModel.scopeList(state.modes);
-
-      if (!inScope.length) {
-        $('chart-backlog').innerHTML = '<p class="cx-empty">Nothing is in the plan — every severity is set to "Not in plan".</p>';
-        $('legend-backlog').innerHTML = '';
+      if (forecast.scope <= 0) {
+        $('forecast-note').innerHTML =
+          'Nothing is selected, so this plan costs nothing and moves nothing — the backlog keeps taking ' +
+          `<strong>${CxModel.int(forecast.arrivals)}</strong> new findings a week. ` +
+          'Move a slider above to build a plan.';
         return;
       }
 
-      const series = inScope.map((s) => ({
-        key: s, label: s, color: c[s],
-        values: R.frames.open[s].map((v) => v || 0).concat(forecastWeeks.map((w) => w.open[s] || 0)),
-      }));
-
-      const tips = labels.map((week, i) => {
-        const rows = series.map((s) =>
-          `<div class="t-row"><span><span class="t-dot" style="background:${s.color}"></span>${s.label}</span><span>${CxModel.int(s.values[i])}</span></div>`);
-        const total = series.reduce((a, s) => a + s.values[i], 0);
-        return `<div class="t-title">${i < history.length ? 'Week ending ' : 'Projected '}${CxCharts.shortDate(week)}</div>` +
-          rows.join('') +
-          `<div class="t-row t-total"><span>Total</span><span>${CxModel.int(total)}</span></div>`;
-      });
-
-      $('chart-backlog').innerHTML = CxCharts.stackedArea({
-        id: 'backlog', labels: labels.map(CxCharts.shortDate), series,
-        splitAt: history.length - 1, tipRows: tips, height: 320,
-      });
-      $('legend-backlog').innerHTML = series.map((s) =>
-        `<span class="item"><span class="swatch" style="background:${s.color}"></span>${s.label}</span>`).join('') +
-        `<span class="item"><span class="swatch" style="background:var(--brand);opacity:.25"></span>Projected at ${CxModel.int(state.pace)}/week</span>`;
-
-      const scoped = CxModel.scoped(R.frames.open, state.modes);
-      $('table-backlog').innerHTML =
-        '<table><thead><tr><th>Week ending</th>' +
-        SEV.map((s) => `<th>${dot(s)}${s}</th>`).join('') + '<th>In plan</th></tr></thead><tbody>' +
-        history.map((week, i) => `<tr><td>${week}</td>` +
-          SEV.map((s) => `<td>${CxModel.int(R.frames.open[s][i])}</td>`).join('') +
-          `<td>${CxModel.int(scoped[i])}</td></tr>`).join('') +
-        '</tbody></table>';
+      const holds = forecast.pace >= forecast.arrivals;
+      $('forecast-note').innerHTML =
+        `<strong>${CxModel.int(forecast.pace)} findings a week</strong> works through the ` +
+        `${CxModel.int(forecast.scope)} selected above in <strong>${CxModel.weeksAsDuration(forecast.weeksToFinishPlan)}</strong>, ` +
+        `for <strong>${CxModel.int(cost.total)} credits</strong>. ` +
+        (holds
+          ? `That also outruns the ${CxModel.int(forecast.arrivals)} findings arriving each week, so the whole backlog ` +
+            `reaches zero in <strong>${CxModel.weeksAsDuration(forecast.weeksToZero)}</strong>.`
+          : `It does not keep up with the ${CxModel.int(forecast.arrivals)} arriving each week, so the backlog keeps ` +
+            `growing meanwhile: <strong>${CxModel.int(forecast.paceToHold)} a week</strong> holds the line, and ` +
+            'anything above that starts killing the debt.');
     }
 
-    function renderFlowChart() {
-      const f = flowColors();
-      const introduced = CxModel.scoped(R.frames.introduced, state.modes);
-      const cleared = CxModel.scoped(R.frames.fixed, state.modes);
-      const net = introduced.map((v, i) => (v === null || cleared[i] === null ? null : cleared[i] - v));
+    /* ----------------------------------------------------------------- wiring -- */
 
-      const tips = R.frames.weeks.map((week, i) =>
-        `<div class="t-title">Week ending ${CxCharts.shortDate(week)}</div>` +
-        `<div class="t-row"><span><span class="t-dot" style="background:${f.introduced}"></span>New findings</span><span>${CxModel.int(introduced[i])}</span></div>` +
-        `<div class="t-row"><span><span class="t-dot" style="background:${f.cleared}"></span>Closed</span><span>${CxModel.int(cleared[i])}</span></div>` +
-        `<div class="t-row t-total"><span>Net</span><span>${CxModel.signed(net[i])}</span></div>`);
-
-      $('chart-flow').innerHTML = CxCharts.flow({
-        id: 'flow', labels: R.frames.weeks.map(CxCharts.shortDate),
-        groups: [
-          { label: 'New findings', color: f.introduced, values: introduced },
-          { label: 'Closed', color: f.cleared, values: cleared },
-        ],
-        line: { label: 'Net', color: f.backlog, values: net },
-        tipRows: tips, height: 290,
-      });
-      $('legend-flow').innerHTML =
-        `<span class="item"><span class="swatch" style="background:${f.introduced}"></span>New findings arriving</span>` +
-        `<span class="item"><span class="swatch" style="background:${f.cleared}"></span>Findings closed</span>` +
-        `<span class="item"><span class="swatch line" style="background:${f.backlog}"></span>Net — above zero means the backlog shrank</span>`;
-    }
-
-    function renderScenarioChart() {
-      const sc = scenarioColors();
-      const labels = scenarios[0].result.weeks.map((w) => w.date);
-      const series = scenarios.map((scenario) => ({
-        key: scenario.id,
-        color: sc[scenario.id],
-        values: scenario.result.weeks.map((w) => w.remaining),
-        endLabel: CxModel.compact(scenario.result.endTotal),
-        dashed: scenario.id === 'nothing',
-      }));
-
-      const tips = labels.map((week, i) =>
-        `<div class="t-title">${CxCharts.shortDate(week)} — week ${i + 1}</div>` +
-        scenarios.map((scenario, k) =>
-          `<div class="t-row"><span><span class="t-dot" style="background:${series[k].color}"></span>${esc(scenario.name)}</span><span>${CxModel.int(series[k].values[i])}</span></div>`).join(''));
-
-      $('chart-scenarios').innerHTML = CxCharts.lines({
-        id: 'scenarios', labels: labels.map(CxCharts.shortDate), series, tipRows: tips, yZero: true, height: 290,
-      });
-      $('legend-scenarios').innerHTML = scenarios.map((scenario, k) =>
-        `<span class="item"><span class="swatch line" style="background:${series[k].color}"></span>${esc(scenario.name)}</span>`).join('');
-
-      const priced = R.creditPrice;
-      $('table-scenarios').innerHTML =
-        '<table><thead><tr><th>Scenario</th><th>Findings / week</th>' +
-        `<th>Backlog after ${state.horizon}w</th><th>Reaches zero in</th><th>Credits over ${state.horizon}w</th>` +
-        (priced ? '<th>Approx. value</th>' : '') + '</tr></thead><tbody>' +
-        scenarios.map((scenario) => `<tr>
-          <td>${esc(scenario.name)}<div class="hint">${esc(scenario.note)}</div></td>
-          <td>${CxModel.int(scenario.processing)}</td>
-          <td>${CxModel.int(scenario.result.endTotal)}</td>
-          <td>${CxModel.weeksAsDuration(scenario.result.weeksToZero)}</td>
-          <td>${CxModel.int(scenario.result.totalCredits)}</td>
-          ${priced ? `<td>${money(scenario.result.totalCredits) || '—'}</td>` : ''}
-        </tr>`).join('') + '</tbody></table>';
-    }
-
-    function renderSpendChart() {
-      const f = flowColors();
-      const weeks = forecast.weeks;
-      const labels = weeks.map((w) => w.date);
-      const series = [{
-        key: 'spend', color: f.backlog,
-        values: weeks.map((w) => w.cumulativeCredits),
-        endLabel: CxModel.compact(forecast.totalCredits),
-      }];
-      const tips = labels.map((week, i) =>
-        `<div class="t-title">Week ${i + 1} — ${CxCharts.shortDate(week)}</div>` +
-        `<div class="t-row"><span>Credits this week</span><span>${CxModel.int(weeks[i].weekCredits)}</span></div>` +
-        `<div class="t-row"><span>Cumulative</span><span>${CxModel.int(weeks[i].cumulativeCredits)}</span></div>` +
-        `<div class="t-row"><span>Backlog left</span><span>${CxModel.int(weeks[i].remaining)}</span></div>`);
-
-      $('chart-spend').innerHTML = CxCharts.lines({
-        id: 'spend', labels: labels.map(CxCharts.shortDate), series, tipRows: tips, yZero: true, height: 230,
-      });
-      $('legend-spend').innerHTML =
-        `<span class="item"><span class="swatch line" style="background:${f.backlog}"></span>Cumulative credits at ${CxModel.int(state.pace)} findings/week</span>`;
-    }
-
-    function renderCostBars() {
-      const c = colors();
-      const rows = CxModel.scopeList(state.modes).map((s) => ({
-        label: s, color: c[s],
-        count: cost.bySeverity[s].count,
-        triage: cost.bySeverity[s].triage,
-        remediation: cost.bySeverity[s].remediation,
-        total: cost.bySeverity[s].total,
-      }));
-      $('chart-cost').innerHTML = CxCharts.costBars({ rows });
-      $('legend-cost').innerHTML =
-        '<span class="item"><span class="swatch" style="background:var(--muted);opacity:.45"></span>Triage — every finding</span>' +
-        '<span class="item"><span class="swatch" style="background:var(--muted)"></span>Remediation — true positives only</span>';
-    }
-
-    /* ------------------------------------------------------------- wire-up -- */
-
-    function rerender() {
+    $('pace').addEventListener('input', () => { state.pace = Number($('pace').value); compute(); });
+    $('horizon').addEventListener('change', () => { state.horizon = Number($('horizon').value); compute(); });
+    $('fp-all').addEventListener('input', () => {
+      const value = Number($('fp-all').value);
+      $('fp-all-out').textContent = `${value}%`;
+      setPlan((s, row) => { row.fp = value; });
+    });
+    $('btn-all').addEventListener('click', () => setPlan((s, row, backlog) => { row.selected = backlog; }));
+    $('btn-none').addEventListener('click', () => setPlan((s, row) => { row.selected = 0; }));
+    $('btn-ch').addEventListener('click', () => setPlan((s, row, backlog) => {
+      row.selected = (s === 'Critical' || s === 'High') ? backlog : 0;
+    }));
+    $('btn-reset').addEventListener('click', () => {
+      state.plan = JSON.parse(JSON.stringify(R.plan));
+      state.pace = R.pace;
+      $('pace').value = String(R.pace);
+      syncSliders();
       compute();
-      renderKpis();
-      renderHeadline();
-      renderPlan();
-      renderCostTiles();
-      renderCostBars();
-      renderPace();
-      renderBacklogChart();
-      renderFlowChart();
-      renderScenarioChart();
-      renderSpendChart();
-      CxCharts.bind(document);
-    }
-
-    $('pace').addEventListener('input', () => {
-      state.pace = Number($('pace').value);
-      rerender();
-    });
-    $('deadline').addEventListener('change', () => {
-      state.deadlineWeeks = Number($('deadline').value);
-      rerender();
-    });
-    $('horizon').addEventListener('change', () => {
-      state.horizon = Number($('horizon').value);
-      rerender();
-    });
-    $('btn-match-deadline').addEventListener('click', () => {
-      state.pace = Math.ceil(CxModel.requiredProcessing(
-        stats.scope.backlog, Math.max(0, stats.scope.avgIntroduced), state.deadlineWeeks));
-      $('pace').value = String(state.pace);
-      rerender();
     });
     $('btn-print').addEventListener('click', () => window.print());
-    $('btn-reset').addEventListener('click', () => {
-      state.modes = Object.assign({}, R.modes);
-      state.pace = R.pace;
-      state.horizon = R.horizon;
-      state.deadlineWeeks = R.deadlineWeeks;
-      $('horizon').value = String(state.horizon);
-      $('deadline').value = String(state.deadlineWeeks);
-      rerender();
+    // The weekly table is collapsed on screen; a printed copy should carry it.
+    window.addEventListener('beforeprint', () => {
+      document.querySelectorAll('details').forEach((d) => { d.open = true; });
     });
     $('btn-theme').addEventListener('click', () => {
       document.documentElement.setAttribute('data-theme', theme() === 'dark' ? 'light' : 'dark');
-      rerender();
+      renderKpis();
+      renderHistoryCharts();
+      renderSliders();
+      compute();
     });
 
-    rerender();
+    renderKpis();
+    renderHistoryCharts();
+    renderSliders();
+    compute();
+    CxCharts.bind(document);
   },
 
-  /* ------------------------------------------------------------- assembly -- */
+  /* ---------------------------------------------------------------- build -- */
 
   build(context) {
     const esc = CxCharts.esc;
-    const customer = context.customer || 'Customer';
+    const customer = context.customer || 'Your organisation';
+    const generatedLabel = new Date(context.generatedAt).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
     const logo = context.logoDataUrl
-      ? `<img src="${context.logoDataUrl}" alt="${esc(customer)}">`
+      ? `<img src="${esc(context.logoDataUrl)}" alt="${esc(customer)}">`
       : CxBrand.logoSvg(34);
-    const generated = new Date(context.generatedAt);
-    const generatedLabel = generated.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    /* The Filters tab arrives as {field, operator, value} rows, not a string. */
+    const filterLabel = (filters) => {
+      if (!Array.isArray(filters) || !filters.length) return '—';
+      return filters
+        .map((f) => [f.field, f.operator, f.value].filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join(' · ') || '—';
+    };
 
     const provenanceRows = ['totals', 'fixed'].map((slot) => {
-      const meta = context.provenance[slot];
-      if (!meta) return '';
-      const filters = (meta.filters || [])
-        .map((f) => `${esc(f.field)} ${esc(f.operator)} ${esc(f.value)}`).join('; ');
+      const meta = (context.provenance && context.provenance[slot]) || {};
       return `<tr><td>${slot === 'fixed' ? 'Fixed vulnerabilities' : 'Total vulnerabilities'}</td>` +
         `<td style="text-align:left">${esc(meta.fileName || '—')}</td>` +
-        `<td style="text-align:left">${meta.exportedAt ? esc(String(meta.exportedAt).slice(0, 10)) : '—'}</td>` +
-        `<td style="text-align:left">${filters || '—'}</td></tr>`;
+        `<td style="text-align:left">${esc(meta.exportedAt ? String(meta.exportedAt).slice(0, 10) : '—')}</td>` +
+        `<td style="text-align:left;white-space:normal">${esc(filterLabel(meta.filters))}</td></tr>`;
     }).join('');
-
-    const assumptionRows = CxModel.SEVERITIES.map((s) => `
-      <tr>
-        <td><span class="sev-dot" style="background:${context.palette.severity.light[s]}"></span>${s}</td>
-        <td>${CxModel.pct(context.assumptions.truePositiveRate[s])}</td>
-        <td>${context.assumptions.triageCredits.toFixed(2)}</td>
-        <td>${(context.assumptions.truePositiveRate[s] * context.assumptions.remediationCredits).toFixed(2)}</td>
-        <td>${CxModel.unitCost(s, context.assumptions, 'full').toFixed(2)}</td>
-        <td>${CxModel.unitCost(s, context.assumptions, 'triage').toFixed(2)}</td>
-      </tr>`).join('');
 
     const body = `
 <div class="page">
 
   <header class="masthead">
     <span class="logo">${logo}</span>
-    <span>
+    <div>
       <div class="customer">${esc(customer)}</div>
       <h1>${esc(context.title)}</h1>
-      <div class="hint">Checkmarx credit forecast for triage and remediation</div>
-    </span>
-    <span class="meta">
+      <p class="hint" style="margin:0">
+        Findings to ${esc(context.frames.weeks[context.frames.weeks.length - 1])} ·
+        ${context.frames.weeks.length} weekly snapshots
+      </p>
+    </div>
+    <div class="meta">
       ${generatedLabel}<br>
       ${context.preparedBy ? `Prepared by ${esc(context.preparedBy)}<br>` : ''}
-      ${context.validity ? `Valid until ${esc(context.validity)}` : ''}
-    </span>
+      ${context.validity ? `Valid until ${esc(context.validity)}<br>` : ''}
+      <span class="no-print" style="display:inline-flex;gap:6px;margin-top:8px">
+        <button type="button" class="plain" id="btn-theme">◐</button>
+        <button type="button" class="plain accent" id="btn-print">Print / save PDF</button>
+      </span>
+    </div>
   </header>
-
-  <div class="toolbar no-print">
-    <button type="button" class="plain accent" id="btn-print">Save as PDF</button>
-    <button type="button" class="plain" id="btn-reset">Reset to the proposed plan</button>
-    <button type="button" class="plain" id="btn-theme" title="Switch light / dark">◐</button>
-    <span class="locked">🔒 Credit rates and true-positive assumptions are fixed</span>
-  </div>
-
-  <div class="callout no-print">
-    <strong>This page is live.</strong> Change what you want to do with each
-    severity, and move the weekly pace — the credit totals, the burn-down and
-    every chart update as you go. The rate card behind them
-    (${context.assumptions.triageCredits} credit per triage,
-    ${context.assumptions.remediationCredits} per remediation, and the
-    true-positive rates) is fixed and cannot be edited here.
-  </div>
 
   <p class="section-title">Where the backlog stands</p>
   <div class="grid four" id="kpis"></div>
   <div class="card" style="margin-top:14px"><p class="headline" id="headline"></p></div>
 
-  <p class="section-title">Choose what to fix</p>
   <section class="card">
     <header>
-      <h2>The plan, line by line</h2>
-      <span class="sub">Every line is yours to change. The credits per finding are not.</span>
-    </header>
-    <div class="table-scroll" id="plan-table"></div>
-    <p class="hint" style="margin-top:10px">
-      <strong>Triage + remediate</strong> pays to disposition every finding and fix
-      the real ones, so the line can reach zero.
-      <strong>Triage only</strong> pays to disposition them, which removes the false
-      positives and leaves the real findings open by choice.
-      <strong>Not in plan</strong> spends nothing and changes nothing.
-    </p>
-  </section>
-
-  <p class="section-title">What it costs</p>
-  <div class="grid four" id="cost-kpis"></div>
-
-  <section class="card" style="margin-top:14px">
-    <header>
-      <h2>Cost to clear today's backlog</h2>
-      <span class="sub">Lighter segment = triage, solid segment = remediation.</span>
-    </header>
-    <div class="chart-wrap" id="chart-cost"></div>
-    <div class="legend" id="legend-cost"></div>
-  </section>
-
-  <p class="section-title">How fast the debt goes away</p>
-  <section class="card">
-    <header><h2>Set the pace</h2></header>
-    <div class="grid two">
-      <label>
-        <span class="hint">Work through <output id="pace-out">0</output> findings per week</span>
-        <input type="range" id="pace" min="0" max="100" step="1" value="${Math.round(context.pace)}">
-      </label>
-      <div>
-        <label>
-          <span class="hint">Or aim at a deadline</span>
-          <select id="deadline">
-            ${[13, 26, 52, 104].map((w) =>
-              `<option value="${w}"${w === context.deadlineWeeks ? ' selected' : ''}>Clear the backlog in ${w} weeks</option>`).join('')}
-          </select>
-        </label>
-        <p class="hint" id="deadline-note" style="margin-top:6px"></p>
-        <button type="button" class="plain no-print" id="btn-match-deadline"
-                style="padding:5px 11px;font-size:12px">Set the pace to meet it</button>
-      </div>
-    </div>
-    <p id="pace-note" style="margin-top:12px"></p>
-    <label class="no-print">
-      <span class="hint">Forecast horizon</span>
-      <select id="horizon" style="max-width:220px">
-        ${[26, 52, 78, 104, 156].map((w) =>
-          `<option value="${w}"${w === context.horizon ? ' selected' : ''}>${w} weeks</option>`).join('')}
-      </select>
-    </label>
-  </section>
-
-  <section class="card">
-    <header>
-      <h2>Open findings: measured, then projected</h2>
-      <span class="sub">The divider marks where the data ends and the forecast begins.</span>
+      <h2>Open findings over time</h2>
+      <span class="sub">Measured from the weekly exports — no projection in this chart.</span>
     </header>
     <div class="chart-wrap" id="chart-backlog"></div>
     <div class="legend" id="legend-backlog"></div>
-    <div class="table-scroll" style="margin-top:14px" id="table-backlog"></div>
   </section>
 
   <section class="card">
     <header>
-      <h2>Arrivals against closures, week by week</h2>
-      <span class="sub">New findings are derived: open(t) − open(t−1) + closed(t).</span>
+      <h2>Debt rate against fix rate</h2>
+      <span class="sub">Findings arriving each week against findings closed each week, in counts.</span>
     </header>
     <div class="chart-wrap" id="chart-flow"></div>
     <div class="legend" id="legend-flow"></div>
+    <details>
+      <summary>Show the weekly figures</summary>
+      <div class="table-scroll" style="margin-top:12px" id="table-history"></div>
+    </details>
   </section>
 
+  <p class="section-title">Choose what to fix</p>
   <section class="card">
     <header>
-      <h2>Four paces compared</h2>
-      <span class="sub">Same arrival rate throughout — only the pace changes.</span>
+      <h2>Adjust the plan</h2>
+      <span class="sub">Move the sliders. Every figure below follows.</span>
+      <span class="locked" style="margin-left:auto">🔒 credit rates are fixed</span>
     </header>
-    <div class="chart-wrap" id="chart-scenarios"></div>
-    <div class="legend" id="legend-scenarios"></div>
-    <div class="table-scroll" style="margin-top:14px" id="table-scenarios"></div>
+    <div class="sev-grid" id="sev-grid"></div>
+    <div class="plan-tools no-print">
+      <label class="field">
+        <span>Set the false-positive rate for every severity at once: <output id="fp-all-out">—</output></span>
+        <input type="range" id="fp-all" min="0" max="100" step="1" value="30">
+      </label>
+      <div class="plan-buttons">
+        <button type="button" class="plain" id="btn-all">Select all</button>
+        <button type="button" class="plain" id="btn-none">Select none</button>
+        <button type="button" class="plain" id="btn-ch">Critical + High</button>
+        <button type="button" class="plain" id="btn-reset">Reset</button>
+      </div>
+    </div>
   </section>
 
+  <p class="section-title">What it costs in Checkmarx credits</p>
+  <div class="grid three" id="summary-row"></div>
+
+  <section class="card" style="margin-top:14px">
+    <header>
+      <h2>Estimate</h2>
+      <span class="sub">Triage = findings selected × ${context.assumptions.triageCredits}.
+        Remediation = true positives × ${context.assumptions.remediationCredits}.</span>
+    </header>
+    <div class="table-scroll" id="table-cost"></div>
+  </section>
+
+  <p class="section-title">How fast the debt dies</p>
   <section class="card">
     <header>
-      <h2>Credit spend over time</h2>
-      <span class="sub">Cumulative credits at the pace set above.</span>
+      <h2>Backlog forecast</h2>
+      <span class="sub">Both futures take the same measured arrival rate. Only the pace differs.</span>
     </header>
-    <div class="chart-wrap" id="chart-spend"></div>
-    <div class="legend" id="legend-spend"></div>
+    <div class="grid two no-print" style="margin-bottom:8px">
+      <label class="field">
+        <span>Work through <output id="pace-out">0</output> findings per week</span>
+        <input type="range" id="pace" min="0" max="100" step="1" value="${context.pace}">
+      </label>
+      <label class="field">
+        <span>Forecast horizon: <output id="horizon-out">${context.horizon}</output> weeks</span>
+        <input type="range" id="horizon" min="8" max="156" step="4" value="${context.horizon}">
+      </label>
+    </div>
+    <div class="chart-wrap" id="chart-forecast"></div>
+    <div class="legend" id="legend-forecast"></div>
+    <div class="callout" id="forecast-note" style="margin-top:14px"></div>
   </section>
 
   <p class="section-title">The rate card and the method</p>
@@ -749,19 +653,20 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
     </header>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Severity</th><th>True positive %</th><th>Triage credits</th>
-          <th>Expected remediation credits</th><th>Credits each, fully fixed</th><th>Credits each, triage only</th></tr></thead>
-        <tbody>${assumptionRows}</tbody>
+        <thead><tr><th style="text-align:left">Item</th><th>Credits</th><th style="text-align:left">Applies to</th></tr></thead>
+        <tbody>
+          <tr><td>Triage</td><td>${context.assumptions.triageCredits}</td>
+            <td style="text-align:left">Every finding you select, true positive or not.</td></tr>
+          <tr><td>Remediation</td><td>${context.assumptions.remediationCredits}</td>
+            <td style="text-align:left">Only the findings that turn out to be real.</td></tr>
+        </tbody>
       </table>
     </div>
     <p class="hint" style="margin-top:12px">
-      Every finding costs ${context.assumptions.triageCredits} credit to triage.
-      Only the findings that turn out to be real cost a further
-      ${context.assumptions.remediationCredits} to remediate, so the expected cost
-      of one finding is ${context.assumptions.triageCredits} +
-      ${context.assumptions.remediationCredits} × its true-positive rate. False
-      positives stop after triage. The true-positive rates above are estimates
-      until replaced with measured triage history.
+      These two rates are set by Checkmarx and cannot be changed in this report.
+      What you can change is the scope: how many findings of each severity to put
+      through triage, and what share of them you expect to be false positives.
+      A false positive costs its triage credit and stops there.
     </p>
   </section>
 
@@ -769,25 +674,25 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
     <header><h2>Where the data came from</h2></header>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Export</th><th style="text-align:left">File</th>
+        <thead><tr><th style="text-align:left">Export</th><th style="text-align:left">File</th>
           <th style="text-align:left">Exported</th><th style="text-align:left">Filters</th></tr></thead>
         <tbody>${provenanceRows}</tbody>
       </table>
     </div>
     <p class="hint" style="margin-top:12px">
       Weeks covered: ${esc(context.frames.weeks[0])} to ${esc(context.frames.weeks[context.frames.weeks.length - 1])}
-      (${context.frames.weeks.length} weekly snapshots). Arrival and closure rates
-      are ${context.lookback}-week averages. Capacity is spent worst severity
-      first: Critical before High, and so on down.
+      (${context.frames.weeks.length} weekly snapshots). New findings are derived from the two
+      exports as open(t) − open(t−1) + closed(t). The debt and fix rates are
+      ${context.lookback}-week averages, in counts of findings.
     </p>
   </section>
 
   <p class="footnote">
     Generated by the Checkmarx Backlog Cost Calculator on ${generatedLabel}. This
-    file contains its own data and runs entirely in your browser — nothing is sent
-    anywhere when you change the plan. Figures are forecasts based on the weekly
-    exports named above and the fixed assumptions in the rate card; actual credit
-    consumption depends on real triage outcomes.
+    file carries its own data and runs entirely in your browser — nothing is sent
+    anywhere when you move a slider. Figures are forecasts based on the weekly
+    exports named above; actual credit consumption depends on real triage outcomes,
+    which is exactly what the false-positive sliders let you test.
   </p>
 
 </div>`;

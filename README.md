@@ -20,9 +20,9 @@ python3 -m http.server 8080 && open http://localhost:8080/
 2. **Reads the two weekly exports** — dropped in together or one at a time.
 3. **Derives the arrival rate**, which neither export contains, and charts it
    against the fix rate so the gap is unmissable.
-4. **Projects the backlog forward** under four paces, with a time-to-zero.
-5. **Prices it in Checkmarx credits** — 1 per triage, 3 per remediation, scaled
-   by the true-positive rate, because false positives never need a fix.
+4. **Prices a plan in Checkmarx credits** — 1 per triage, 3 per remediation,
+   with the false positives paying only the triage credit.
+5. **Projects the backlog forward** against doing nothing, with a time-to-zero.
 6. **Exports one self-contained interactive HTML file** the customer can play
    with: they change *what* gets fixed, never *what it costs*.
 
@@ -66,81 +66,120 @@ ways it can go wrong: weeks present in only one export, and weeks where the
 implied arrival rate is negative (which means projects left the scope, or the
 two exports were filtered differently — compare their *Filters* tabs).
 
+### The plan: two sliders per severity
+
+Everything the customer decides comes down to two numbers per severity, and
+nothing else:
+
+| Slider | What it sets |
+|---|---|
+| **To triage** | how many of the open findings to put through triage, `0 … open` |
+| **Est. false positive %** | how many of those are expected to come back false |
+
+A global control sets the false-positive rate across all five at once, and four
+presets — *select all*, *select none*, *Critical + High*, *reset* — cover the
+usual opening positions.
+
+That is deliberately narrower than it could be. An earlier version modelled a
+tri-state plan per severity (*triage + remediate* / *triage only* / *not in
+plan*); it was more expressive and much harder to hold in your head in front of
+a customer. A volume slider subsumes "not in plan" — set it to zero — and the
+severities that would have been triage-only are better handled by admitting a
+high false-positive rate, which is what "triage only" was really encoding.
+
 ### Pricing
 
-Every finding in the plan is triaged. Only the ones that turn out to be real
-are remediated:
+Every selected finding is triaged. Only the ones that turn out to be real are
+remediated:
 
 ```
-credits(finding) = triage + truePositiveRate(severity) × remediation
-                 = 1      + tp                        × 3          (defaults)
+triage       = selected × 1                     (credits per triage)
+truePositive = selected × (100 − fp) / 100
+remediation  = truePositive × 3                 (credits per remediation)
+total        = triage + remediation
 ```
 
-So a Critical at 85% true positive costs 3.55 credits and a Low at 40% costs
-2.20. All three inputs — both rates and the per-severity true-positive
-percentages — are editable in the app and **frozen into the export**.
+So 1,000 Criticals at 15% false positive cost `1,000 + 850 × 3 = 3,550`
+credits, and the same 1,000 at 60% cost `1,000 + 400 × 3 = 2,200`. Both credit
+rates are editable in the app and **frozen read-only into the export** — the
+scope is the customer's to negotiate, the rate card is not.
 
-The true-positive defaults (85 / 75 / 60 / 40 / 10%) are typical AppSec
-figures, not measurements. Replace them with the customer's own triage history
-the moment there is any; the report states plainly that they are estimates.
+The false-positive defaults (15 / 25 / 40 / 60 / 90%) are typical AppSec
+figures, not measurements. They are a starting position for the sliders, and
+the report says so.
 
-### Three plans per severity
+### The two rates that actually matter
 
-This is the lever the customer actually cares about, so it is a first-class
-part of the model rather than an on/off switch:
+Both headline indicators are **counts per week**, averaged over the chosen
+window:
 
-| Mode | Cost | Effect on the backlog |
-|---|---|---|
-| **Triage + remediate** | `count × (1 + tp × 3)` | the whole line can reach zero |
-| **Triage only** | `count × 1` | false positives leave; the real findings stay, by choice |
-| **Not in plan** | nothing | nothing |
+```
+debt rate = mean(introduced)      new findings arriving each week
+fix rate  = mean(fixed)           findings closed each week
+```
 
-"Triage only" is what most teams really do with Informational and Low: pay to
-disposition them so the noise goes away, and never fund the fixes. Modelling it
-honestly means the report can say *"this plan cannot reach zero, and here is the
-number it settles at"* instead of implying a clean sweep.
+They are never expressed as a percentage of the backlog. On the sample data the
+backlog grows from ~1.9M to ~2.9M over twelve weeks, and a rate drawn against
+that moving base produces an axis running from −44% to 2,065% with every real
+week flattened into the floor — which is exactly the defect this version was
+built to fix. The one ratio that survives a moving base is `fixRate / debtRate`,
+stated in words: *"for every 100 findings that arrive, the team clears 39."*
 
 ### The forecast
 
-Each severity holds two buckets: findings not yet triaged, and true positives
-that were triaged but deliberately left unfixed. Weekly capacity is spent on
-the untriaged pile, worst severity first — Critical before High, and so on —
-because that is how real remediation programmes are run.
+Two futures on one axis, both in open findings, both taking the same measured
+arrival rate:
 
 ```
-open(t) = open(t−1) + introduced − processed
+do nothing   open(w) = backlog + debtRate × w
+this plan    open(w) = backlog + debtRate × w − cleared(w)
 ```
 
-Time-to-zero has a closed form, so the answer survives past the charted
+where `cleared(w)` accumulates at the chosen weekly pace until the selected
+scope is exhausted. Arrivals do not stop because a plan started, so the two
+lines run parallel again once the plan finishes; that gap is the point of the
+chart.
+
+Time-to-clear has a closed form, so the answer survives past the charted
 horizon:
 
 ```
-weeksToZero      = backlog / (processing − introduced)      when processing > introduced
-requiredProcessing(weeks) = backlog / weeks + introduced
+weeksToFinishPlan = selected / pace
+weeksToZero       = backlog / (pace − debtRate)      when pace > debtRate
+paceToHold        = debtRate                          the break-even pace
 ```
 
-Four scenarios are always compared: **do nothing**, **current pace** (the rate
-measured in the upload), **your chosen pace**, and **clear it by a deadline**
-(which solves for the required rate).
+When the pace is below the debt rate the report says so plainly rather than
+drawing a line to zero that will never happen.
 
 ---
 
 ## The exported report
 
-One HTML file, typically ~70 KB, that opens from disk with no network.
+One HTML file, around 55 KB, that opens from disk with no network.
 
 It embeds the weekly data *and* a serialised copy of the model and chart code,
-so it is genuinely live rather than a set of pictures: switch a severity to
-triage-only, drop another, move the pace slider, and every total, table and
-chart recomputes with exactly the code that produced the numbers in the app.
+so it is genuinely live rather than a set of pictures: drag a severity's volume
+down, admit a higher false-positive rate, move the pace slider, and every
+total, table and chart recomputes with exactly the code that produced the
+numbers in the app.
 
-What is **locked** and rendered read-only: credits per triage, credits per
-remediation, and the per-severity true-positive rates. The rate card is stated
-in full in an appendix, next to the data provenance — file names, export dates,
-and the Checkmarx One filters each export was pulled with.
+Its shape is deliberately short — four sections and three charts:
 
-**Save as PDF** prints it: the segmented controls collapse to plain text, the
-interactive furniture disappears, and the tables reflow to the page.
+1. **Where the backlog stands** — four figures and one sentence, then open
+   findings over time and debt rate against fix rate.
+2. **Choose what to fix** — the five slider boxes, each ending in its own
+   running credit total.
+3. **What it costs** — three summary cards and one matrix table.
+4. **How fast the debt dies** — the pace slider and the two-line forecast.
+
+What is **locked** and rendered read-only: credits per triage and credits per
+remediation. The rate card is stated in full in an appendix, next to the data
+provenance — file names, export dates, and the Checkmarx One filters each
+export was pulled with.
+
+**Save as PDF** prints it: the sliders disappear and leave their values behind
+as plain text, the weekly table opens, and the tables reflow to the page.
 
 ---
 
@@ -180,7 +219,7 @@ assets/css/app.css          theme tokens, light + dark
 assets/js/brand.js          brand colours, validated palettes, logo
 assets/js/xlsx-lite.js      dependency-free .xlsx / .csv reader
 assets/js/parse.js          both export layouts -> one weekly series
-assets/js/model.js          rates, cost, forecast, scenarios, budget  (pure)
+assets/js/model.js          rates, plan, cost, forecast               (pure)
 assets/js/charts.js         SVG chart set + shared hover layer        (pure)
 assets/js/report.js         builds the self-contained customer report
 assets/js/app.js            UI wiring
@@ -196,10 +235,13 @@ variables, and refer to siblings as `CxModel.foo` / `CxCharts.foo`.
 ## Known limits
 
 - Arrival and fix rates are flat averages over the chosen window. A trended
-  arrival model would be better for a team whose scan coverage is still growing.
-- Capacity is one weekly number shared across severities. Separate triage and
-  remediation capacities would model a team where triage is the bottleneck.
+  arrival model would be better for a team whose scan coverage is still growing
+  — on the sample data the window includes an onboarding spike that lifts the
+  debt rate well above the steady-state figure.
+- The weekly pace is one number shared across severities, and the forecast
+  clears the selected scope without asking which severity goes first. That is a
+  simplification: the cost table is exact, the ordering within the plan is not.
 - Credit rates are per-action, not per-engine. If SAST, SCA and IaC findings
   price differently for a customer, run the calculator once per engine.
-- The credit price field is a convenience multiplier for an indicative currency
-  figure. It is not a quote.
+- The false-positive sliders are an estimate the customer owns. Nothing in the
+  exports measures them.
